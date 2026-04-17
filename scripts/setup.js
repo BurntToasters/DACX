@@ -39,6 +39,15 @@ function hasCmd(name) {
   }
 }
 
+function canRun(cmd) {
+  try {
+    execSync(cmd, { stdio: 'ignore', shell: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function header(msg) {
   console.log(`\n${'─'.repeat(60)}\n  ${msg}\n${'─'.repeat(60)}`);
 }
@@ -78,6 +87,27 @@ function printWindowsFlutterInstallHelp() {
   );
 }
 
+function hasMacXcodebuild() {
+  return (
+    canRun('xcrun --find xcodebuild') &&
+    canRun('xcodebuild -version')
+  );
+}
+
+function printMacXcodeInstallHelp() {
+  console.error(
+    '\n✖ Full Xcode is required for macOS builds, but xcodebuild is unavailable.\n' +
+    '  Install Xcode from the App Store or https://developer.apple.com/xcode/\n' +
+    '  Then run:\n' +
+    '  sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer\n' +
+    '  sudo xcodebuild -runFirstLaunch\n' +
+    '  sudo xcodebuild -license accept\n\n' +
+    '  Verify:\n' +
+    '  xcrun --find xcodebuild\n' +
+    '  xcodebuild -version\n'
+  );
+}
+
 // Win
 
 function setupWindows() {
@@ -113,6 +143,22 @@ function setupMac() {
   console.log('\nChecking Xcode command-line tools...');
   run('xcode-select --install 2>/dev/null || true', { allowFail: true });
   run('sudo xcodebuild -license accept 2>/dev/null || true', { allowFail: true });
+
+  // Full Xcode (required for flutter build macos / release:mac)
+  if (!hasMacXcodebuild()) {
+    const xcodeDeveloperDir = '/Applications/Xcode.app/Contents/Developer';
+    if (existsSync(`${xcodeDeveloperDir}/usr/bin/xcodebuild`)) {
+      console.log('\nXcode.app detected. Attempting to switch active developer directory...');
+      run(`sudo xcode-select --switch "${xcodeDeveloperDir}"`, { allowFail: true });
+      run('sudo xcodebuild -runFirstLaunch', { allowFail: true });
+      run('sudo xcodebuild -license accept', { allowFail: true });
+    }
+  }
+  if (!hasMacXcodebuild()) {
+    printMacXcodeInstallHelp();
+    process.exit(1);
+  }
+  console.log('✔ Xcode found');
 
   // Homebrew
   if (!hasCmd('brew')) {

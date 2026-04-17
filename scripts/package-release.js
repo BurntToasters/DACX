@@ -65,6 +65,10 @@ function removeIfExists(filePath) {
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 }
 
+function escapePowerShellSingleQuoted(value) {
+  return String(value).replace(/'/g, "''");
+}
+
 function copyDirSync(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
@@ -92,9 +96,22 @@ function packageWindows() {
   const zipName = "DACX-Windows-x64.zip";
   const zipPath = path.join(releaseDir, zipName);
   removeIfExists(zipPath);
-  run(
-    `powershell -NoProfile -Command "Compress-Archive -Path '${buildDir}\\*' -DestinationPath '${zipPath}'"`,
-  );
+  if (hasCommand("7z")) {
+    run(`7z a -tzip -mx=9 "${zipPath}" *`, { cwd: buildDir });
+  } else {
+    const psSourceDir = escapePowerShellSingleQuoted(buildDir);
+    const psZipPath = escapePowerShellSingleQuoted(zipPath);
+    run(
+      `powershell -NoProfile -Command "` +
+        `$src='${psSourceDir}'; ` +
+        `$dst='${psZipPath}'; ` +
+        `if (Test-Path $dst) { Remove-Item -Force $dst }; ` +
+        `Add-Type -AssemblyName System.IO.Compression.FileSystem; ` +
+        `[System.IO.Compression.ZipFile]::CreateFromDirectory(` +
+        `$src, $dst, [System.IO.Compression.CompressionLevel]::Optimal, $false)` +
+        `"`,
+    );
+  }
   console.log(`  ✓ ${zipName}`);
 
   // 2. MSIX installer
