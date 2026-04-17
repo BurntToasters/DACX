@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -184,7 +185,13 @@ class SettingsService extends ChangeNotifier {
     return (now - lastUpdateCheck) > const Duration(hours: 24).inMilliseconds;
   }
 
-  String get hwDec => _prefs.getString(_kHwDec) ?? 'auto';
+  String get hwDec {
+    final stored = _prefs.getString(_kHwDec);
+    if (stored != null) return stored;
+    // media_kit_video may crash with GPU rendering on recent macOS builds.
+    // Default to software rendering on macOS unless user explicitly opts in.
+    return Platform.isMacOS ? 'no' : 'auto';
+  }
   set hwDec(String v) {
     _prefs.setString(_kHwDec, v);
     notifyListeners();

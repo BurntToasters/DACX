@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
@@ -60,7 +61,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     _playerService = PlayerService();
-    _videoController = VideoController(_playerService.player);
+    final hwDec = _settings.hwDec;
+    _videoController = VideoController(
+      _playerService.player,
+      configuration: VideoControllerConfiguration(
+        hwdec: hwDec,
+        enableHardwareAcceleration: _shouldEnableHardwareAcceleration(hwDec),
+      ),
+    );
     _volume = _settings.volume;
 
     // Apply saved playback settings.
@@ -126,6 +134,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _applySpeed(double speed) {
     _playerService.setRate(speed);
+  }
+
+  bool _shouldEnableHardwareAcceleration(String hwDec) {
+    if (hwDec == 'no') return false;
+    // Work around macOS OpenGL crashes in media_kit_video on newer macOS.
+    if (Platform.isMacOS) return false;
+    return true;
   }
 
   void _applyHwDec(String value) {
