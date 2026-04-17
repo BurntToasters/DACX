@@ -41,7 +41,7 @@
     "release:win": "npm run release:prepare && npm run build:win && npm run release:package:win && npm run release:sign:gpg && npm run release:finalize",
     "release:mac:codesign": "dotenv -e .env -- bash scripts/mac-codesign.sh",
     "release:mac:ssh": "dotenv -e .env -- bash scripts/mac-keychain-ssh.sh",
-    "release:mac": "npm run release:prepare && npm run build:mac && npm run release:mac:codesign && npm run release:sign:gpg && npm run release:finalize",
+    "release:mac": "npm run release:prepare && npm run build:mac && npm run release:mac:ssh && npm run release:mac:codesign && npm run release:sign:gpg && npm run release:finalize",
     "release:linux": "npm run release:prepare && npm run build:linux && npm run release:package:linux && npm run release:sign:gpg && npm run release:finalize",
     "gitprune": "node scripts/git-prune-local-branches.js",
     "gitprune:dry": "node scripts/git-prune-local-branches.js --dry-run",
