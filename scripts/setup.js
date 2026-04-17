@@ -1,8 +1,9 @@
-// WIN: Requires winget and VS C++
+// WIN: Requires Flutter and VS C++
 // MAC: Requires Homebrew
 // Linux: Requires Deb/Ubuntu-based
 
 import { execSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { platform } from 'node:os';
 
 const target = process.argv[2];
@@ -42,28 +43,52 @@ function header(msg) {
   console.log(`\n${'─'.repeat(60)}\n  ${msg}\n${'─'.repeat(60)}`);
 }
 
+function resolveFlutterOnWindowsPath() {
+  if (platform() !== 'win32') return hasCmd('flutter');
+  if (hasCmd('flutter')) return true;
+
+  const userProfile = process.env.USERPROFILE;
+  const localAppData = process.env.LOCALAPPDATA;
+  const candidates = [
+    'C:\\src\\flutter\\bin',
+    userProfile ? `${userProfile}\\flutter\\bin` : null,
+    userProfile ? `${userProfile}\\dev\\flutter\\bin` : null,
+    localAppData ? `${localAppData}\\Programs\\flutter\\bin` : null,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    process.env.PATH = `${candidate};${process.env.PATH ?? ''}`;
+    if (hasCmd('flutter')) return true;
+  }
+
+  return false;
+}
+
+function printWindowsFlutterInstallHelp() {
+  console.error(
+    '\n✖ Flutter is not available on PATH.\n' +
+    '  Install Flutter manually on Windows, restart terminal, then re-run setup.\n' +
+    '  Docs: https://docs.flutter.dev/install/manual\n\n' +
+    '  Quick PowerShell option:\n' +
+    '  git clone https://github.com/flutter/flutter.git -b stable C:\\src\\flutter\n' +
+    '  [Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\\src\\flutter\\bin", "User")\n\n' +
+    '  Verify in a new terminal:\n' +
+    '  flutter --version\n'
+  );
+}
+
 // Win
 
 function setupWindows() {
   header('DACX — Windows setup');
 
   // Flutter
-  if (!hasCmd('flutter')) {
-    console.log('\nFlutter not found. Attempting install via winget...');
-    if (hasCmd('winget')) {
-      run('winget install --id Google.Flutter -e --accept-source-agreements --accept-package-agreements', { allowFail: true });
-      console.log('\n⚠  You may need to restart your terminal / re-open SSH session so flutter is on PATH.');
-    } else {
-      console.error(
-        '\n✖ winget is not available. Install Flutter manually:\n' +
-        '  https://docs.flutter.dev/get-started/install/windows/desktop\n' +
-        '  Then re-run this script.'
-      );
-      process.exit(1);
-    }
-  } else {
-    console.log('✔ Flutter found');
+  if (!resolveFlutterOnWindowsPath()) {
+    printWindowsFlutterInstallHelp();
+    process.exit(1);
   }
+  console.log('✔ Flutter found');
 
   // Visual Studio Build Tools check
   console.log('\n⚠  Windows desktop builds require Visual Studio Build Tools with the');
