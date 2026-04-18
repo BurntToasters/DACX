@@ -12,6 +12,9 @@ Built with Flutter + [media_kit](https://github.com/media-kit/media-kit) (libmpv
 
 ## Development
 
+> [!NOTE]
+> This project uses Flutter/Dart but also NodeJS. Its a little bit messy and not the best of practices I know, im just the most familiar and confident with js scripting and node so thats how the project is controlled. Sorry :P
+
 ```bash
 # Install Node.js dependencies (build scripts)
 npm install
