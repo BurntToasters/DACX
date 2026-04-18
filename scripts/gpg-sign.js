@@ -287,6 +287,23 @@ function sha256(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
 
+function classifyArtifactPlatform(name) {
+  const n = name.toLowerCase();
+  if (/windows|\.msi$|\.exe$|\.msix$/.test(n)) {
+    const arch = /arm64|aarch64/.test(n) ? "arm64" : "x64";
+    return `Windows-${arch}`;
+  }
+  if (/macos|\.dmg$/.test(n) || (/\.zip$/i.test(n) && /mac/i.test(name))) {
+    return "macOS";
+  }
+  if (/linux|\.deb$|\.rpm$|\.appimage$|\.flatpak$/.test(n)) {
+    if (/arm64|aarch64/.test(n)) return "Linux-arm64";
+    if (/amd64|x86_64|x64/.test(n)) return "Linux-x86_64";
+    return "Linux-x86_64";
+  }
+  return null;
+}
+
 function generateChecksums(files) {
   const candidates = files.filter((f) => {
     const name = path.basename(f);
@@ -295,15 +312,28 @@ function generateChecksums(files) {
 
   if (candidates.length === 0) return [];
 
-  const entries = candidates
-    .sort((a, b) => path.basename(a).localeCompare(path.basename(b)))
-    .map((f) => `${sha256(f)}  ${path.basename(f)}`);
+  // Group by platform
+  const groups = new Map();
+  for (const f of candidates) {
+    const platform = classifyArtifactPlatform(path.basename(f));
+    const key = platform || "other";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
 
-  const fileName = "SHA256SUMS.txt";
-  const out = path.join(releaseDir, fileName);
-  fs.writeFileSync(out, entries.join("\n") + "\n");
-  console.log(`  + ${fileName} (${entries.length} entries)`);
-  return [out];
+  const outFiles = [];
+  for (const [platform, platformFiles] of Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+    const entries = platformFiles
+      .sort((a, b) => path.basename(a).localeCompare(path.basename(b)))
+      .map((f) => `${sha256(f)}  ${path.basename(f)}`);
+
+    const fileName = `SHA256SUMS-${platform}.txt`;
+    const out = path.join(releaseDir, fileName);
+    fs.writeFileSync(out, entries.join("\n") + "\n");
+    console.log(`  + ${fileName} (${entries.length} entries)`);
+    outFiles.push(out);
+  }
+  return outFiles;
 }
 
 // ── GPG signing ──────────────────────────────────────────────

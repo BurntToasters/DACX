@@ -416,7 +416,7 @@ function buildWindowsMsiInstallerV4(buildDir, wixPath) {
   const majorVersion = getWixMajorVersion(wixPath);
   const acceptEulaFlag = majorVersion >= 7 ? " -acceptEula wix7" : "";
   run(
-    `"${wixPath}" build${acceptEulaFlag} -arch x64` +
+    `"${wixPath}" build${acceptEulaFlag} -arch x64 -pdbType none` +
       ` -out "${toWindowsPath(outPath)}" "${toWindowsPath(wxsPath)}"`,
   );
 
@@ -424,6 +424,15 @@ function buildWindowsMsiInstallerV4(buildDir, wixPath) {
     console.error(`WiX did not produce expected output: ${outPath}`);
     process.exit(1);
   }
+
+  // Clean up stale WiX byproducts (e.g. .wixpdb, .msix) from the output directory
+  const outDir = path.dirname(outPath);
+  const outBase = path.basename(outPath, path.extname(outPath));
+  for (const staleExt of [".wixpdb", ".msix"]) {
+    const stale = path.join(outDir, outBase + staleExt);
+    removeIfExists(stale);
+  }
+
   console.log(`  ✓ ${outName}`);
 }
 
