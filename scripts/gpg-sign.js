@@ -137,9 +137,10 @@ function artifactMatchesVersion(name) {
 
 // ── File collection ──────────────────────────────────────────
 
-function clearReleaseStaging() {
+function clearReleaseStaging(preserveNames = new Set()) {
   if (!fs.existsSync(releaseDir)) return;
   for (const name of fs.readdirSync(releaseDir)) {
+    if (preserveNames.has(name)) continue;
     const fullPath = path.join(releaseDir, name);
     let isFile = false;
     try {
@@ -238,18 +239,35 @@ function collectArtifacts() {
   );
 
   if (found.length > 0) {
-    clearReleaseStaging();
     if (found.length < discovered.length) {
       console.log(`  ~ Skipped ${discovered.length - found.length} artifact(s) not matching ${VERSION}`);
     }
 
+    // Resolve selection BEFORE clearing so stat() can read existing files.
     const selected = pickNewestByBasename(found);
+
+    // Identify sources that live in release/ so clearReleaseStaging preserves them.
+    const preserveNames = new Set();
+    for (const src of selected) {
+      if (path.resolve(path.dirname(src)) === path.resolve(releaseDir)) {
+        preserveNames.add(path.basename(src));
+      }
+    }
+
+    clearReleaseStaging(preserveNames);
+
     const collected = [];
     for (const src of selected) {
       const originalName = path.basename(src);
       const cleanName = cleanArtifactName(originalName);
       const dest = path.join(releaseDir, cleanName);
-      fs.copyFileSync(src, dest);
+      if (path.resolve(src) !== path.resolve(dest)) {
+        fs.copyFileSync(src, dest);
+        // Remove the old name if it was in release/ and got renamed
+        if (preserveNames.has(originalName)) {
+          fs.rmSync(src, { force: true });
+        }
+      }
       if (cleanName !== originalName) {
         console.log(`  + ${originalName} → ${cleanName}`);
       } else {
