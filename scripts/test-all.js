@@ -89,9 +89,9 @@ function runCommand(name, command, args, parser, results, options = {}) {
 function printBanner() {
   console.log(`${colors.bold}${colors.blue}
 ╔══════════════════════════════════════╗
-║         DACX TEST SUITE              ║
+║         Dacx TEST SUITE              ║
 ╚══════════════════════════════════════╝
-DACX Version: ${appVersion}
+Dacx Version: ${appVersion}
 Script Version: ${scriptVersion}
 ${colors.reset}`);
 }

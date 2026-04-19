@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "run.rosie" "\0"
-            VALUE "FileDescription", "dacx" "\0"
+            VALUE "FileDescription", "Dacx" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "dacx" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 run.rosie. All rights reserved." "\0"
             VALUE "OriginalFilename", "dacx.exe" "\0"
-            VALUE "ProductName", "dacx" "\0"
+            VALUE "ProductName", "Dacx" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

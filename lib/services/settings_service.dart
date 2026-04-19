@@ -68,8 +68,10 @@ class SettingsService extends ChangeNotifier {
 
   LoopMode get loopMode {
     final s = _prefs.getString(_kLoopMode);
-    return LoopMode.values.firstWhere((m) => m.name == s,
-        orElse: () => LoopMode.none);
+    return LoopMode.values.firstWhere(
+      (m) => m.name == s,
+      orElse: () => LoopMode.none,
+    );
   }
 
   set loopMode(LoopMode m) {
@@ -103,8 +105,10 @@ class SettingsService extends ChangeNotifier {
 
   AccentColor get accentColor {
     final s = _prefs.getString(_kAccent);
-    return AccentColor.values.firstWhere((a) => a.name == s,
-        orElse: () => AccentColor.blueGrey);
+    return AccentColor.values.firstWhere(
+      (a) => a.name == s,
+      orElse: () => AccentColor.blueGrey,
+    );
   }
 
   set accentColor(AccentColor c) {
@@ -123,7 +127,6 @@ class SettingsService extends ChangeNotifier {
     _prefs.setBool(_kRememberWindow, v);
     notifyListeners();
   }
-
 
   Size? get windowSize {
     final w = _prefs.getDouble(_kWindowWidth);
@@ -149,7 +152,6 @@ class SettingsService extends ChangeNotifier {
     _prefs.setDouble(_kWindowY, pos.dy);
   }
 
-
   List<String> get recentFiles {
     final raw = _prefs.getString(_kRecentFiles);
     if (raw == null) return [];
@@ -159,7 +161,8 @@ class SettingsService extends ChangeNotifier {
   void addRecentFile(String path) {
     final files = recentFiles..remove(path);
     files.insert(0, path);
-    if (files.length > maxRecentFiles) files.removeRange(maxRecentFiles, files.length);
+    if (files.length > maxRecentFiles)
+      files.removeRange(maxRecentFiles, files.length);
     _prefs.setString(_kRecentFiles, jsonEncode(files));
   }
 
@@ -192,6 +195,7 @@ class SettingsService extends ChangeNotifier {
     // Default to software rendering on macOS unless user explicitly opts in.
     return Platform.isMacOS ? 'no' : 'auto';
   }
+
   set hwDec(String v) {
     _prefs.setString(_kHwDec, v);
     notifyListeners();

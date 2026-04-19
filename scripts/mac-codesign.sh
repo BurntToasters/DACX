@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 PKG_VERSION="$(node -p "require('$ROOT/package.json').version")"
 
-APP_NAME="dacx"
+APP_NAME="Dacx"
 BUILD_DIR="$ROOT/build/macos/Build/Products/Release"
 APP_BUNDLE="$BUILD_DIR/${APP_NAME}.app"
 ZIP_NAME="${APP_NAME}-${PKG_VERSION}-macos.zip"
@@ -72,17 +72,17 @@ rm -f "$ZIP_PATH"
 ditto -c -k --keepParent "$APP_BUNDLE" "$ZIP_PATH"
 
 # ── DMG ───────────────────────────────────────────────────────
-DMG_NAME="DACX-macOS.dmg"
+DMG_NAME="Dacx-macOS.dmg"
 DMG_PATH="$ROOT/release/$DMG_NAME"
 DMG_STAGE="$ROOT/build/dmg-stage"
 
 echo "Creating DMG..."
 rm -rf "$DMG_STAGE"
 mkdir -p "$DMG_STAGE"
-cp -R "$APP_BUNDLE" "$DMG_STAGE/DACX.app"
+cp -R "$APP_BUNDLE" "$DMG_STAGE/Dacx.app"
 ln -s /Applications "$DMG_STAGE/Applications"
 
-hdiutil create -volname "DACX" -srcfolder "$DMG_STAGE" \
+hdiutil create -volname "Dacx" -srcfolder "$DMG_STAGE" \
   -ov -format UDZO "$DMG_PATH"
 
 rm -rf "$DMG_STAGE"

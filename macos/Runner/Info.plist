@@ -12,14 +12,124 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleDisplayName</key>
+	<string>Dacx</string>
 	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>Dacx</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.audio</string>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Dacx Audio Media</string>
+			<key>UTTypeIdentifier</key>
+			<string>run.rosie.dacx.audio</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>mp3</string>
+					<string>flac</string>
+					<string>wav</string>
+					<string>ogg</string>
+					<string>aac</string>
+					<string>m4a</string>
+					<string>wma</string>
+					<string>opus</string>
+					<string>ape</string>
+					<string>alac</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>audio/mpeg</string>
+					<string>audio/flac</string>
+					<string>audio/wav</string>
+					<string>audio/x-wav</string>
+					<string>audio/ogg</string>
+					<string>audio/aac</string>
+					<string>audio/x-m4a</string>
+					<string>audio/x-ms-wma</string>
+					<string>audio/opus</string>
+					<string>audio/x-ape</string>
+					<string>audio/alac</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.movie</string>
+				<string>public.video</string>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Dacx Video Media</string>
+			<key>UTTypeIdentifier</key>
+			<string>run.rosie.dacx.video</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>mp4</string>
+					<string>mkv</string>
+					<string>avi</string>
+					<string>webm</string>
+					<string>mov</string>
+					<string>wmv</string>
+					<string>flv</string>
+					<string>m4v</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>video/mp4</string>
+					<string>video/x-matroska</string>
+					<string>video/x-msvideo</string>
+					<string>video/webm</string>
+					<string>video/quicktime</string>
+					<string>video/x-ms-wmv</string>
+					<string>video/x-flv</string>
+					<string>video/x-m4v</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Dacx Audio Media</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>run.rosie.dacx.audio</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Dacx Video Media</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>run.rosie.dacx.video</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>

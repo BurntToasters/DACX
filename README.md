@@ -1,4 +1,4 @@
-# DACX
+# Dacx
 
 Quick, lightweight cross-platform media player.
 

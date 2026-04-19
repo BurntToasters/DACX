@@ -20,7 +20,7 @@ const GPG_KEY_ID = process.env.GPG_KEY_ID;
 const GPG_PASSPHRASE = process.env.GPG_PASSPHRASE;
 const GH_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
 const REPO_OWNER = process.env.GH_REPO_OWNER || "BurntToasters";
-const REPO_NAME = process.env.GH_REPO_NAME || "DACX";
+const REPO_NAME = process.env.GH_REPO_NAME || "Dacx";
 const TAG_DOWNLOAD_BASE_URL = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${encodeURIComponent(TAG)}`;
 const RELEASE_DOWNLOAD_BASE_URL = (
   process.env.RELEASE_DOWNLOAD_BASE_URL || TAG_DOWNLOAD_BASE_URL
@@ -38,7 +38,7 @@ const rx = (r) => (n) => r.test(n);
 const isChecksumTextName = rx(/^SHA256SUMS(?:-[a-z0-9_]+(?:-[a-z0-9_]+)?)?\.txt$/i);
 
 const ARTIFACT_RULES = [
-  rx(/^DACX-.*\.exe$/i),
+  rx(/^Dacx-.*\.exe$/i),
   ext(".msi"),
   ext(".dmg"),
   ext(".zip"),
@@ -76,42 +76,42 @@ const SEARCH_DIRS = [
 
 function cleanArtifactBaseName(name) {
   // macOS
-  if (/\.app\.tar\.gz$/i.test(name)) return "DACX-macOS.app.tar.gz";
-  if (/\.dmg$/i.test(name)) return "DACX-macOS.dmg";
-  if (/^dacx.*\.zip$/i.test(name) && /mac/i.test(name)) return "DACX-macOS.zip";
+  if (/\.app\.tar\.gz$/i.test(name)) return "Dacx-macOS.app.tar.gz";
+  if (/\.dmg$/i.test(name)) return "Dacx-macOS.dmg";
+  if (/^dacx.*\.zip$/i.test(name) && /mac/i.test(name)) return "Dacx-macOS.zip";
 
   // Windows
-  if (/x64.*\.exe$/i.test(name) || /\.exe$/i.test(name)) return "DACX-Windows-x64.exe";
-  if (/\.msi$/i.test(name)) return "DACX-Windows-x64.msi";
+  if (/x64.*\.exe$/i.test(name) || /\.exe$/i.test(name)) return "Dacx-Windows-x64.exe";
+  if (/\.msi$/i.test(name)) return "Dacx-Windows-x64.msi";
 
   // Linux
-  if (/amd64\.deb$/i.test(name) || /x86_64\.deb$/i.test(name)) return "DACX-Linux-amd64.deb";
-  if (/aarch64\.deb$/i.test(name) || /arm64\.deb$/i.test(name)) return "DACX-Linux-arm64.deb";
+  if (/amd64\.deb$/i.test(name) || /x86_64\.deb$/i.test(name)) return "Dacx-Linux-amd64.deb";
+  if (/aarch64\.deb$/i.test(name) || /arm64\.deb$/i.test(name)) return "Dacx-Linux-arm64.deb";
 
-  if (/x86_64\.rpm$/i.test(name) || /amd64\.rpm$/i.test(name)) return "DACX-Linux-x86_64.rpm";
-  if (/aarch64\.rpm$/i.test(name) || /arm64\.rpm$/i.test(name)) return "DACX-Linux-aarch64.rpm";
+  if (/x86_64\.rpm$/i.test(name) || /amd64\.rpm$/i.test(name)) return "Dacx-Linux-x86_64.rpm";
+  if (/aarch64\.rpm$/i.test(name) || /arm64\.rpm$/i.test(name)) return "Dacx-Linux-aarch64.rpm";
 
   if (/x86_64\.appimage$/i.test(name) || /amd64\.appimage$/i.test(name))
-    return "DACX-Linux-x86_64.AppImage";
+    return "Dacx-Linux-x86_64.AppImage";
   if (/aarch64\.appimage$/i.test(name) || /arm64\.appimage$/i.test(name))
-    return "DACX-Linux-arm64.AppImage";
+    return "Dacx-Linux-arm64.AppImage";
 
   if (/x86_64\.flatpak$/i.test(name) || /amd64\.flatpak$/i.test(name))
-    return "DACX-Linux-x86_64.flatpak";
+    return "Dacx-Linux-x86_64.flatpak";
   if (/aarch64\.flatpak$/i.test(name) || /arm64\.flatpak$/i.test(name))
-    return "DACX-Linux-aarch64.flatpak";
+    return "Dacx-Linux-aarch64.flatpak";
 
   // Generic zip (Linux bundle)
-  if (/linux.*\.zip$/i.test(name)) return "DACX-Linux-x64.zip";
+  if (/linux.*\.zip$/i.test(name)) return "Dacx-Linux-x64.zip";
 
   // Linux tarball
   if (/linux.*\.tar\.gz$/i.test(name) || /x86_64.*\.tar\.gz$/i.test(name))
-    return "DACX-Linux-x86_64.tar.gz";
+    return "Dacx-Linux-x86_64.tar.gz";
   if (/aarch64.*\.tar\.gz$/i.test(name) || /arm64.*\.tar\.gz$/i.test(name))
-    return "DACX-Linux-arm64.tar.gz";
+    return "Dacx-Linux-arm64.tar.gz";
 
   // Windows zip
-  if (/windows.*\.zip$/i.test(name)) return "DACX-Windows-x64.zip";
+  if (/windows.*\.zip$/i.test(name)) return "Dacx-Windows-x64.zip";
 
   return name;
 }
@@ -400,7 +400,7 @@ function ghRequest(method, endpoint, body) {
       method,
       headers: {
         Authorization: `Bearer ${GH_TOKEN}`,
-        "User-Agent": "DACX-Release",
+        "User-Agent": "Dacx-Release",
         Accept: "application/vnd.github.v3+json",
         "X-GitHub-Api-Version": "2022-11-28",
       },
@@ -456,7 +456,7 @@ async function getOrCreateRelease() {
 
   return await ghRequest("POST", `/repos/${REPO_OWNER}/${REPO_NAME}/releases`, {
     tag_name: TAG,
-    name: `DACX ${VERSION}`,
+    name: `Dacx ${VERSION}`,
     draft: true,
     prerelease: IS_PRERELEASE,
   });
@@ -478,7 +478,7 @@ async function uploadAsset(uploadUrl, filePath) {
         method: "POST",
         headers: {
           Authorization: `Bearer ${GH_TOKEN}`,
-          "User-Agent": "DACX-Release",
+          "User-Agent": "Dacx-Release",
           Accept: "application/vnd.github.v3+json",
           "Content-Type": isText ? "text/plain" : "application/octet-stream",
           "Content-Length": content.length,
@@ -555,7 +555,7 @@ async function uploadAssetWithReplace(release, filePath) {
 // ── Main ─────────────────────────────────────────────────────
 
 async function main() {
-  console.log(`\nDACX ${VERSION} — release pipeline\n`);
+  console.log(`\nDacx ${VERSION} — release pipeline\n`);
 
   console.log("[1/4] Checking GPG...");
   if (!GPG_KEY_ID) {

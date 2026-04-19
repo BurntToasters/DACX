@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>run.rosie.dacx</id>
-  <name>DACX</name>
+  <name>Dacx</name>
   <summary>Quick, lightweight cross-platform media player</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-only</project_license>
@@ -10,7 +10,7 @@
   </developer>
   <description>
     <p>
-      DACX is a fast, lightweight media player for audio and video files.
+      Dacx is a fast, lightweight media player for audio and video files.
       Built with Flutter and powered by libmpv, it supports a wide range of
       formats including MP3, FLAC, WAV, OGG, AAC, MP4, MKV, AVI, and WebM.
     </p>
@@ -21,9 +21,9 @@
     </p>
   </description>
   <launchable type="desktop-id">dacx.desktop</launchable>
-  <url type="homepage">https://github.com/BurntToasters/DACX</url>
-  <url type="bugtracker">https://github.com/BurntToasters/DACX/issues</url>
-  <url type="vcs-browser">https://github.com/BurntToasters/DACX</url>
+  <url type="homepage">https://github.com/BurntToasters/Dacx</url>
+  <url type="bugtracker">https://github.com/BurntToasters/Dacx/issues</url>
+  <url type="vcs-browser">https://github.com/BurntToasters/Dacx</url>
   <content_rating type="oars-1.1" />
   <provides>
     <binary>dacx</binary>

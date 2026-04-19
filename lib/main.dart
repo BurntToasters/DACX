@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -8,7 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import 'screens/player_screen.dart';
 import 'services/settings_service.dart';
 
-void main() async {
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
 
@@ -25,68 +26,108 @@ void main() async {
     size: savedSize ?? const Size(960, 600),
     minimumSize: const Size(480, 320),
     center: savedPos == null,
-    title: 'DACX',
+    title: 'Dacx',
+    backgroundColor: const Color(0xFF0E141B),
     titleBarStyle: Platform.isWindows || Platform.isMacOS
         ? TitleBarStyle.hidden
         : TitleBarStyle.normal,
   );
+
+  final windowReady = Completer<void>();
+  final firstFrameReady = Completer<void>();
+  var windowShown = false;
+
+  Future<void> showWindowIfReady() async {
+    if (windowShown ||
+        !windowReady.isCompleted ||
+        !firstFrameReady.isCompleted) {
+      return;
+    }
+    windowShown = true;
+    await windowManager.show();
+    await windowManager.focus();
+  }
 
   windowManager.waitUntilReadyToShow(windowOptions, () async {
     if (savedPos != null) {
       await windowManager.setPosition(savedPos);
     }
     await windowManager.setAlwaysOnTop(settings.alwaysOnTop);
-    await windowManager.show();
-    await windowManager.focus();
+    if (!windowReady.isCompleted) {
+      windowReady.complete();
+    }
+    await showWindowIfReady();
   });
 
   // Collect CLI file argument (first non-flag arg).
-  final cliFile = Platform.resolvedExecutable.isNotEmpty
-      ? _parseCliFilePath()
-      : null;
+  final cliFile = _parseCliFilePath(args);
 
-  runApp(DACXApp(settings: settings, initialFile: cliFile));
+  runApp(DacxApp(settings: settings, initialFile: cliFile));
+
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    if (!firstFrameReady.isCompleted) {
+      firstFrameReady.complete();
+    }
+    await showWindowIfReady();
+  });
 }
 
 /// Extracts the first CLI argument that looks like a file path.
-String? _parseCliFilePath() {
-  final args = Platform.executableArguments.isEmpty
-      ? <String>[]
-      : Platform.executableArguments;
-  // In release mode, args are often empty — use the raw arguments from env.
-  final raw = args.isEmpty
-      ? _rawArgs()
-      : args;
-  for (final arg in raw) {
-    if (!arg.startsWith('-') && File(arg).existsSync()) return arg;
+String? _parseCliFilePath(List<String> args) {
+  for (final rawArg in args) {
+    if (rawArg.trim().isEmpty || rawArg.startsWith('-')) continue;
+    final candidatePath = _normalizeCliPath(rawArg);
+    if (candidatePath != null && File(candidatePath).existsSync()) {
+      return candidatePath;
+    }
   }
   return null;
 }
 
-List<String> _rawArgs() {
-  // Platform.executableArguments may omit user args in AOT builds.
-  // Dart passes user args after a '--' sentinel or as positional args.
-  // We fall back to the command-line string parsing on Windows.
+String? _normalizeCliPath(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+
+  if (trimmed.length >= 2 &&
+      ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+          (trimmed.startsWith("'") && trimmed.endsWith("'")))) {
+    return trimmed.substring(1, trimmed.length - 1);
+  }
+
+  final uri = Uri.tryParse(trimmed);
+  if (uri != null && uri.scheme == 'file') {
+    try {
+      return uri.toFilePath(windows: Platform.isWindows);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  if (!trimmed.contains(':')) return trimmed;
+
+  // Preserve Windows paths such as C:\music\song.mp3
   try {
-    // ignore: unnecessary_null_comparison
-    if (Platform.executable != null) {
-      return Platform.executableArguments;
+    if (Platform.isWindows &&
+        trimmed.length > 2 &&
+        RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(trimmed)) {
+      return trimmed;
     }
   } catch (_) {}
-  return [];
+
+  return null;
 }
 
-class DACXApp extends StatefulWidget {
+class DacxApp extends StatefulWidget {
   final SettingsService settings;
   final String? initialFile;
 
-  const DACXApp({super.key, required this.settings, this.initialFile});
+  const DacxApp({super.key, required this.settings, this.initialFile});
 
   @override
-  State<DACXApp> createState() => _DACXAppState();
+  State<DacxApp> createState() => _DacxAppState();
 }
 
-class _DACXAppState extends State<DACXApp> with WindowListener {
+class _DacxAppState extends State<DacxApp> with WindowListener {
   @override
   void initState() {
     super.initState();
@@ -125,7 +166,7 @@ class _DACXAppState extends State<DACXApp> with WindowListener {
     final seed = s.accentColor.color;
 
     return MaterialApp(
-      title: 'DACX',
+      title: 'Dacx',
       debugShowCheckedModeBanner: false,
       themeMode: s.themeMode,
       theme: ThemeData(
@@ -143,10 +184,7 @@ class _DACXAppState extends State<DACXApp> with WindowListener {
         useMaterial3: true,
         brightness: Brightness.dark,
       ),
-      home: PlayerScreen(
-        settings: s,
-        initialFile: widget.initialFile,
-      ),
+      home: PlayerScreen(settings: s, initialFile: widget.initialFile),
     );
   }
 }

@@ -9,19 +9,19 @@
  * Platforms: win, mac, linux
  *
  * Windows produces:
- *   release/DACX-Windows-x64.zip    (portable zip)
- *   release/DACX-Windows-x64.exe    (Inno Setup installer)
- *   release/DACX-Windows-x64.msi    (WiX Toolset installer)
+ *   release/Dacx-Windows-x64.zip    (portable zip)
+ *   release/Dacx-Windows-x64.exe    (Inno Setup installer)
+ *   release/Dacx-Windows-x64.msi    (WiX Toolset installer)
  *
  * macOS produces:
- *   release/DACX-macOS.zip           (codesigned zip — from mac-codesign.sh or fallback)
- *   release/DACX-macOS.dmg           (disk image via hdiutil)
+ *   release/Dacx-macOS.zip           (codesigned zip — from mac-codesign.sh or fallback)
+ *   release/Dacx-macOS.dmg           (disk image via hdiutil)
  *
  * Linux produces:
- *   release/DACX-Linux-x86_64.tar.gz (portable tarball)
- *   release/DACX-Linux-amd64.deb     (Debian package via dpkg-deb)
- *   release/DACX-Linux-x86_64.rpm    (RPM package via rpmbuild)
- *   release/DACX-Linux-x86_64.AppImage (AppImage via appimagetool)
+ *   release/Dacx-Linux-x86_64.tar.gz (portable tarball)
+ *   release/Dacx-Linux-amd64.deb     (Debian package via dpkg-deb)
+ *   release/Dacx-Linux-x86_64.rpm    (RPM package via rpmbuild)
+ *   release/Dacx-Linux-x86_64.AppImage (AppImage via appimagetool)
  */
 
 import fs from "fs";
@@ -32,6 +32,26 @@ import { fileURLToPath } from "url";
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf-8"));
 const VERSION = pkg.version;
+const SUPPORTED_MEDIA_EXTENSIONS = [
+  "mp3",
+  "flac",
+  "wav",
+  "ogg",
+  "aac",
+  "m4a",
+  "wma",
+  "opus",
+  "ape",
+  "alac",
+  "mp4",
+  "mkv",
+  "avi",
+  "webm",
+  "mov",
+  "wmv",
+  "flv",
+  "m4v",
+];
 
 const platform = process.argv[2];
 if (!platform) {
@@ -227,6 +247,101 @@ function escapeXmlAttr(value) {
     .replace(/>/g, "&gt;");
 }
 
+function renderInnoOpenWithRegistryLines() {
+  const lines = [
+    'Root: HKCR; Subkey: "Dacx.Media"; ValueType: string; ValueData: "Dacx Media File"; Flags: uninsdeletekey',
+    'Root: HKCR; Subkey: "Dacx.Media\\\\DefaultIcon"; ValueType: string; ValueData: "{app}\\\\{#AppExeName},0"; Flags: uninsdeletekey',
+    'Root: HKCR; Subkey: "Dacx.Media\\\\shell\\\\open\\\\command"; ValueType: string; ValueData: "\\"{app}\\\\{#AppExeName}\\" \\"%1\\""; Flags: uninsdeletekey',
+    'Root: HKCR; Subkey: "Applications\\\\{#AppExeName}\\\\shell\\\\open\\\\command"; ValueType: string; ValueData: "\\"{app}\\\\{#AppExeName}\\" \\"%1\\""; Flags: uninsdeletekey',
+  ];
+
+  for (const ext of SUPPORTED_MEDIA_EXTENSIONS) {
+    lines.push(
+      `Root: HKCR; Subkey: "Applications\\\\{#AppExeName}\\\\SupportedTypes"; ValueType: string; ValueName: ".${ext}"; ValueData: ""; Flags: uninsdeletevalue`,
+    );
+    lines.push(
+      `Root: HKCR; Subkey: ".${ext}\\\\OpenWithProgids"; ValueType: string; ValueName: "Dacx.Media"; ValueData: ""; Flags: uninsdeletevalue`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function renderWixV4FileAssociationComponent() {
+  const lines = [
+    '      <Component Id="CMP_FILE_ASSOC" Guid="*">',
+    '        <RegistryKey Root="HKLM" Key="Software\\\\Classes\\\\Dacx.Media">',
+    '          <RegistryValue Type="string" Value="Dacx Media File" KeyPath="yes" />',
+    "        </RegistryKey>",
+    '        <RegistryKey Root="HKLM" Key="Software\\\\Classes\\\\Dacx.Media\\\\DefaultIcon">',
+    '          <RegistryValue Type="string" Value="[INSTALLFOLDER]dacx.exe,0" />',
+    "        </RegistryKey>",
+    '        <RegistryKey Root="HKLM" Key="Software\\\\Classes\\\\Dacx.Media\\\\shell\\\\open\\\\command">',
+    '          <RegistryValue Type="string" Value="&quot;[INSTALLFOLDER]dacx.exe&quot; &quot;%1&quot;" />',
+    "        </RegistryKey>",
+    '        <RegistryKey Root="HKLM" Key="Software\\\\Classes\\\\Applications\\\\dacx.exe\\\\shell\\\\open\\\\command">',
+    '          <RegistryValue Type="string" Value="&quot;[INSTALLFOLDER]dacx.exe&quot; &quot;%1&quot;" />',
+    "        </RegistryKey>",
+  ];
+
+  for (const ext of SUPPORTED_MEDIA_EXTENSIONS) {
+    lines.push(
+      `        <RegistryKey Root="HKLM" Key="Software\\Classes\\Applications\\dacx.exe\\SupportedTypes">`,
+    );
+    lines.push(
+      `          <RegistryValue Name=".${ext}" Type="string" Value="" />`,
+    );
+    lines.push("        </RegistryKey>");
+    lines.push(
+      `        <RegistryKey Root="HKLM" Key="Software\\Classes\\.${ext}\\OpenWithProgids">`,
+    );
+    lines.push(
+      '          <RegistryValue Name="Dacx.Media" Type="string" Value="" />',
+    );
+    lines.push("        </RegistryKey>");
+  }
+
+  lines.push("      </Component>");
+  return lines.join("\n");
+}
+
+function renderWixV3FileAssociationComponent() {
+  const lines = [
+    '          <Component Id="CMP_FILE_ASSOC" Guid="*" Win64="yes">',
+    '            <RegistryKey Root="HKLM" Key="Software\\Classes\\Dacx.Media">',
+    '              <RegistryValue Type="string" Value="Dacx Media File" KeyPath="yes" />',
+    "            </RegistryKey>",
+    '            <RegistryKey Root="HKLM" Key="Software\\Classes\\Dacx.Media\\DefaultIcon">',
+    '              <RegistryValue Type="string" Value="[INSTALLFOLDER]dacx.exe,0" />',
+    "            </RegistryKey>",
+    '            <RegistryKey Root="HKLM" Key="Software\\Classes\\Dacx.Media\\shell\\open\\command">',
+    '              <RegistryValue Type="string" Value="&quot;[INSTALLFOLDER]dacx.exe&quot; &quot;%1&quot;" />',
+    "            </RegistryKey>",
+    '            <RegistryKey Root="HKLM" Key="Software\\Classes\\Applications\\dacx.exe\\shell\\open\\command">',
+    '              <RegistryValue Type="string" Value="&quot;[INSTALLFOLDER]dacx.exe&quot; &quot;%1&quot;" />',
+    "            </RegistryKey>",
+  ];
+
+  for (const ext of SUPPORTED_MEDIA_EXTENSIONS) {
+    lines.push(
+      '            <RegistryKey Root="HKLM" Key="Software\\Classes\\Applications\\dacx.exe\\SupportedTypes">',
+    );
+    lines.push(
+      `              <RegistryValue Name=".${ext}" Type="string" Value="" />`,
+    );
+    lines.push("            </RegistryKey>");
+    lines.push(
+      `            <RegistryKey Root="HKLM" Key="Software\\Classes\\.${ext}\\OpenWithProgids">`,
+    );
+    lines.push(
+      '              <RegistryValue Name="Dacx.Media" Type="string" Value="" />',
+    );
+    lines.push("            </RegistryKey>");
+  }
+
+  lines.push("          </Component>");
+  return lines.join("\n");
+}
+
 function listFilesRecursive(baseDir) {
   const out = [];
 
@@ -266,7 +381,7 @@ function packageWindows() {
   }
 
   // 1. Portable zip
-  const zipName = "DACX-Windows-x64.zip";
+  const zipName = "Dacx-Windows-x64.zip";
   const zipPath = path.join(releaseDir, zipName);
   removeIfExists(zipPath);
   if (hasCommand("7z")) {
@@ -305,7 +420,7 @@ function buildWindowsExeInstaller(buildDir) {
     process.exit(1);
   }
 
-  const outName = "DACX-Windows-x64.exe";
+  const outName = "Dacx-Windows-x64.exe";
   const outPath = path.join(releaseDir, outName);
   removeIfExists(outPath);
 
@@ -316,7 +431,7 @@ function buildWindowsExeInstaller(buildDir) {
   const setupIconPath = path.join(root, "windows", "runner", "resources", "app_icon.ico");
 
   const script = `; Auto-generated by scripts/package-release.js
-#define AppName "DACX"
+#define AppName "Dacx"
 #define AppVersion GetEnv("APP_VERSION")
 #define AppPublisher "run.rosie"
 #define AppExeName "dacx.exe"
@@ -355,6 +470,9 @@ Source: "{#SourceDir}\\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubd
 [Icons]
 Name: "{autoprograms}\\{#AppName}"; Filename: "{app}\\{#AppExeName}"
 Name: "{autodesktop}\\{#AppName}"; Filename: "{app}\\{#AppExeName}"; Tasks: desktopicon
+
+[Registry]
+${renderInnoOpenWithRegistryLines()}
 `;
 
   fs.writeFileSync(issPath, script);
@@ -365,7 +483,7 @@ Name: "{autodesktop}\\{#AppName}"; Filename: "{app}\\{#AppExeName}"; Tasks: desk
       APP_VERSION: VERSION,
       SOURCE_DIR: toWindowsPath(buildDir),
       OUTPUT_DIR: toWindowsPath(releaseDir),
-      OUTPUT_NAME: "DACX-Windows-x64",
+      OUTPUT_NAME: "Dacx-Windows-x64",
       SETUP_ICON_PATH: fs.existsSync(setupIconPath) ? toWindowsPath(setupIconPath) : "",
     },
   });
@@ -403,7 +521,7 @@ function buildWindowsMsiInstaller(buildDir) {
 }
 
 function buildWindowsMsiInstallerV4(buildDir, wixPath) {
-  const outName = "DACX-Windows-x64.msi";
+  const outName = "Dacx-Windows-x64.msi";
   const outPath = path.join(releaseDir, outName);
   removeIfExists(outPath);
 
@@ -437,7 +555,7 @@ function buildWindowsMsiInstallerV4(buildDir, wixPath) {
 }
 
 function buildWindowsMsiInstallerV3(buildDir, wixV3Paths) {
-  const outName = "DACX-Windows-x64.msi";
+  const outName = "Dacx-Windows-x64.msi";
   const outPath = path.join(releaseDir, outName);
   removeIfExists(outPath);
 
@@ -565,6 +683,7 @@ function writeWindowsWixV4Source(buildDir, wxsPath) {
 
   const componentRefs = [
     ...fileComponentIds.map((id) => `      <ComponentRef Id="${id}" />`),
+    '      <ComponentRef Id="CMP_FILE_ASSOC" />',
   ].join("\n");
 
   // WiX v4+ schema: <Package> replaces the v3 <Product>+<Package> pair.
@@ -573,7 +692,7 @@ function writeWindowsWixV4Source(buildDir, wxsPath) {
   const wixSource = `<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
-    Name="DACX"
+    Name="Dacx"
     Language="1033"
     Version="${msiVersion}"
     Manufacturer="run.rosie"
@@ -582,14 +701,15 @@ function writeWindowsWixV4Source(buildDir, wxsPath) {
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     <MediaTemplate EmbedCab="yes" />
 ${iconBlock}
-    <Feature Id="ProductFeature" Title="DACX" Level="1">
+    <Feature Id="ProductFeature" Title="Dacx" Level="1">
 ${componentRefs}
     </Feature>
   </Package>
 
   <Fragment>
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="DACX">
+      <Directory Id="INSTALLFOLDER" Name="Dacx">
+${renderWixV4FileAssociationComponent()}
 ${renderDirectoryContents(rootNode, "        ").join("\n")}
       </Directory>
     </StandardDirectory>
@@ -706,13 +826,14 @@ function writeWindowsWixSource(buildDir, wxsPath) {
 
   const componentRefs = [
     ...fileComponentIds.map((id) => `      <ComponentRef Id="${id}" />`),
+    '      <ComponentRef Id="CMP_FILE_ASSOC" />',
   ].join("\n");
 
   const wixSource = `<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product
     Id="*"
-    Name="DACX"
+    Name="Dacx"
     Language="1033"
     Version="${msiVersion}"
     Manufacturer="run.rosie"
@@ -721,7 +842,7 @@ function writeWindowsWixSource(buildDir, wxsPath) {
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     <MediaTemplate EmbedCab="yes" />
 ${iconBlock}
-    <Feature Id="ProductFeature" Title="DACX" Level="1">
+    <Feature Id="ProductFeature" Title="Dacx" Level="1">
 ${componentRefs}
     </Feature>
   </Product>
@@ -729,7 +850,8 @@ ${componentRefs}
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="DACX">
+        <Directory Id="INSTALLFOLDER" Name="Dacx">
+${renderWixV3FileAssociationComponent()}
 ${renderDirectoryContents(rootNode, "          ").join("\n")}
         </Directory>
       </Directory>
@@ -745,7 +867,7 @@ ${renderDirectoryContents(rootNode, "          ").join("\n")}
 
 function packageMac() {
   const appBundle = path.join(
-    root, "build", "macos", "Build", "Products", "Release", "dacx.app",
+    root, "build", "macos", "Build", "Products", "Release", "Dacx.app",
   );
   if (!fs.existsSync(appBundle)) {
     console.error(`App bundle not found: ${appBundle}`);
@@ -759,7 +881,7 @@ function packageMac() {
   if (existing.length > 0) {
     console.log(`  ✓ ${existing[0]} (from mac-codesign.sh)`);
   } else {
-    const zipName = "DACX-macOS.zip";
+    const zipName = "Dacx-macOS.zip";
     const zipPath = path.join(releaseDir, zipName);
     removeIfExists(zipPath);
     run(`ditto -c -k --keepParent "${appBundle}" "${zipPath}"`);
@@ -767,7 +889,7 @@ function packageMac() {
   }
 
   // 2. DMG
-  const dmgName = "DACX-macOS.dmg";
+  const dmgName = "Dacx-macOS.dmg";
   const dmgPath = path.join(releaseDir, dmgName);
   removeIfExists(dmgPath);
 
@@ -779,12 +901,12 @@ function packageMac() {
   fs.mkdirSync(dmgStage, { recursive: true });
 
   // Copy app bundle and create Applications symlink
-  run(`cp -R "${appBundle}" "${dmgStage}/DACX.app"`);
+  run(`cp -R "${appBundle}" "${dmgStage}/Dacx.app"`);
   run(`ln -s /Applications "${dmgStage}/Applications"`);
 
   // Create DMG
   run(
-    `hdiutil create -volname "DACX" -srcfolder "${dmgStage}" ` +
+    `hdiutil create -volname "Dacx" -srcfolder "${dmgStage}" ` +
     `-ov -format UDZO "${dmgPath}"`,
   );
 
@@ -818,7 +940,7 @@ function packageLinux() {
   const iconFile = findIcon();
 
   // 1. Portable tarball
-  const tarName = "DACX-Linux-x86_64.tar.gz";
+  const tarName = "Dacx-Linux-x86_64.tar.gz";
   const tarPath = path.join(releaseDir, tarName);
   removeIfExists(tarPath);
   run(`tar -czf "${tarPath}" -C "${path.dirname(buildDir)}" "${path.basename(buildDir)}"`);
@@ -912,7 +1034,7 @@ function buildDeb(buildDir, desktopFile, iconFile) {
     fs.writeFileSync(path.join(debianDir, "control"), control);
   }
 
-  const debName = "DACX-Linux-amd64.deb";
+  const debName = "Dacx-Linux-amd64.deb";
   const debPath = path.join(releaseDir, debName);
   removeIfExists(debPath);
   run(`dpkg-deb --build --root-owner-group "${debRoot}" "${debPath}"`);
@@ -978,7 +1100,7 @@ function buildRpm(buildDir, desktopFile, iconFile) {
     fs.writeFileSync(path.join(specsDir, "dacx.spec"), spec);
   }
 
-  const rpmName = "DACX-Linux-x86_64.rpm";
+  const rpmName = "Dacx-Linux-x86_64.rpm";
   const rpmPath = path.join(releaseDir, rpmName);
   removeIfExists(rpmPath);
 
@@ -1063,7 +1185,7 @@ exec "$HERE/opt/dacx/dacx" "$@"
     { mode: 0o755 },
   );
 
-  const appImageName = "DACX-Linux-x86_64.AppImage";
+  const appImageName = "Dacx-Linux-x86_64.AppImage";
   const appImagePath = path.join(releaseDir, appImageName);
   removeIfExists(appImagePath);
 
@@ -1106,7 +1228,7 @@ function findFiles(dirPath, ext) {
 
 // ── Main ───────────────────────────────────────────────────────
 
-console.log(`\nPackaging DACX v${VERSION} for ${platform}...\n`);
+console.log(`\nPackaging Dacx v${VERSION} for ${platform}...\n`);
 
 switch (platform) {
   case "win":

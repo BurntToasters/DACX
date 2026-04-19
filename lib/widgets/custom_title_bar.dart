@@ -69,7 +69,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
             const SizedBox(width: 8),
             // Title
             Text(
-              'DACX',
+              'Dacx',
               style: TextStyle(
                 fontSize: 12,
                 color: colorScheme.onSurface.withValues(alpha: 0.8),
@@ -87,9 +87,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                 iconColor: colorScheme.onSurface.withValues(alpha: 0.7),
               ),
               _WindowButton(
-                icon: _isMaximized
-                    ? Icons.filter_none
-                    : Icons.crop_square,
+                icon: _isMaximized ? Icons.filter_none : Icons.crop_square,
                 iconSize: _isMaximized ? 14 : 16,
                 onPressed: () async {
                   if (_isMaximized) {

@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 class UpdateService {
   static const String _owner = 'BurntToasters';
-  static const String _repo = 'DACX';
+  static const String _repo = 'Dacx';
 
   Future<UpdateInfo?> checkForUpdate() async {
     try {
@@ -15,9 +15,9 @@ class UpdateService {
       final uri = Uri.parse(
         'https://api.github.com/repos/$_owner/$_repo/releases/latest',
       );
-      final response = await http.get(uri, headers: {
-        'Accept': 'application/vnd.github.v3+json',
-      }).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(uri, headers: {'Accept': 'application/vnd.github.v3+json'})
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) return null;
 
@@ -49,8 +49,12 @@ class UpdateService {
   static String _stripPreRelease(String v) => v.split('-').first;
 
   bool _isNewer(String latest, String current) {
-    final latestParts = _stripPreRelease(latest).split('.').map(int.tryParse).toList();
-    final currentParts = _stripPreRelease(current).split('.').map(int.tryParse).toList();
+    final latestParts = _stripPreRelease(
+      latest,
+    ).split('.').map(int.tryParse).toList();
+    final currentParts = _stripPreRelease(
+      current,
+    ).split('.').map(int.tryParse).toList();
 
     for (var i = 0; i < 3; i++) {
       final l = (i < latestParts.length ? latestParts[i] : 0) ?? 0;

@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/settings_service.dart';
 import '../services/update_service.dart';
+import '../widgets/custom_title_bar.dart';
 
 class SettingsScreen extends StatefulWidget {
   final SettingsService settings;
@@ -20,50 +23,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDesktopCustomChrome = Platform.isMacOS || Platform.isWindows;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+      appBar: isDesktopCustomChrome
+          ? null
+          : AppBar(title: const Text('Settings')),
+      body: Column(
         children: [
-          _sectionHeader('Playback'),
-          _speedTile(),
-          _loopModeTile(),
-          SwitchListTile(
-            title: const Text('Auto-play on file open'),
-            value: _s.autoPlay,
-            onChanged: (v) => setState(() => _s.autoPlay = v),
+          if (isDesktopCustomChrome) const CustomTitleBar(),
+          if (isDesktopCustomChrome) _desktopHeader(context),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: [
+                _sectionHeader('Playback'),
+                _speedTile(),
+                _loopModeTile(),
+                SwitchListTile(
+                  title: const Text('Auto-play on file open'),
+                  value: _s.autoPlay,
+                  onChanged: (v) => setState(() => _s.autoPlay = v),
+                ),
+                _hwDecTile(),
+                const Divider(),
+                _sectionHeader('Appearance'),
+                _themeModeTile(),
+                _accentColorTile(colorScheme),
+                SwitchListTile(
+                  title: const Text('Always on top'),
+                  value: _s.alwaysOnTop,
+                  onChanged: (v) => setState(() => _s.alwaysOnTop = v),
+                ),
+                SwitchListTile(
+                  title: const Text('Remember window size & position'),
+                  value: _s.rememberWindow,
+                  onChanged: (v) => setState(() => _s.rememberWindow = v),
+                ),
+                const Divider(),
+                _sectionHeader('General'),
+                SwitchListTile(
+                  title: const Text('Check for updates on launch'),
+                  value: _s.updateCheckEnabled,
+                  onChanged: (v) => setState(() => _s.updateCheckEnabled = v),
+                ),
+                _recentFilesTile(),
+                _checkForUpdatesTile(),
+                _keyboardShortcutsTile(),
+                const Divider(),
+                _resetTile(),
+                const Divider(),
+                _licensesTile(),
+                _aboutTile(),
+              ],
+            ),
           ),
-          _hwDecTile(),
-          const Divider(),
-          _sectionHeader('Appearance'),
-          _themeModeTile(),
-          _accentColorTile(colorScheme),
-          SwitchListTile(
-            title: const Text('Always on top'),
-            value: _s.alwaysOnTop,
-            onChanged: (v) => setState(() => _s.alwaysOnTop = v),
+        ],
+      ),
+    );
+  }
+
+  Widget _desktopHeader(BuildContext context) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Back',
+            onPressed: () => Navigator.of(context).maybePop(),
           ),
-          SwitchListTile(
-            title: const Text('Remember window size & position'),
-            value: _s.rememberWindow,
-            onChanged: (v) => setState(() => _s.rememberWindow = v),
+          const Expanded(
+            child: Center(
+              child: Text(
+                'Settings',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              ),
+            ),
           ),
-          const Divider(),
-          _sectionHeader('General'),
-          SwitchListTile(
-            title: const Text('Check for updates on launch'),
-            value: _s.updateCheckEnabled,
-            onChanged: (v) => setState(() => _s.updateCheckEnabled = v),
-          ),
-          _recentFilesTile(),
-          _checkForUpdatesTile(),
-          _keyboardShortcutsTile(),
-          const Divider(),
-          _resetTile(),
-          const Divider(),
-          _licensesTile(),
-          _aboutTile(),
+          const SizedBox(width: 48),
         ],
       ),
     );
@@ -75,8 +114,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+          color: Theme.of(context).colorScheme.primary,
+        ),
       ),
     );
   }
@@ -218,7 +257,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (update != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('DACX v${update.version} is available!'),
+            content: Text('Dacx v${update.version} is available!'),
             action: SnackBarAction(
               label: 'View',
               onPressed: () => UpdateService().openReleasePage(update.url),
@@ -314,7 +353,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onTap: () {
         showLicensePage(
           context: context,
-          applicationName: 'DACX',
+          applicationName: 'Dacx',
           applicationLegalese: '© 2026 run.rosie\nLicensed under GPLv3',
         );
       },
@@ -327,13 +366,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context, snapshot) {
         final version = snapshot.data?.version ?? '...';
         return ListTile(
-          title: const Text('About DACX'),
+          title: const Text('About Dacx'),
           subtitle: Text('Version $version • GPLv3'),
           trailing: IconButton(
             icon: const Icon(Icons.open_in_new),
             tooltip: 'View on GitHub',
             onPressed: () async {
-              final uri = Uri.parse('https://github.com/BurntToasters/DACX');
+              final uri = Uri.parse('https://github.com/BurntToasters/Dacx');
               if (await canLaunchUrl(uri)) {
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
               }
@@ -361,9 +400,9 @@ class _ShortcutRow extends StatelessWidget {
             width: 64,
             child: Text(
               shortcut,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(width: 16),

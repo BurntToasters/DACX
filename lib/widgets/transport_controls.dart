@@ -97,10 +97,7 @@ class TransportControls extends StatelessWidget {
             ),
           const Spacer(),
           // Volume
-          Icon(
-            volume == 0 ? Icons.volume_off : Icons.volume_up,
-            size: 20,
-          ),
+          Icon(volume == 0 ? Icons.volume_off : Icons.volume_up, size: 20),
           SizedBox(
             width: 120,
             child: Slider(
@@ -124,46 +121,37 @@ class TransportControls extends StatelessWidget {
   }
 
   Widget _buildOpenButton(BuildContext context) {
-    if (recentFiles.isEmpty) {
-      return IconButton(
-        icon: const Icon(Icons.folder_open),
-        tooltip: 'Open file',
-        onPressed: onOpenFile,
-      );
-    }
+    final recents = recentFiles
+        .where((path) => path.trim().isNotEmpty)
+        .take(10)
+        .toList(growable: false);
 
-    return PopupMenuButton<String>(
-      tooltip: 'Open file / Recent files',
-      onSelected: (value) {
-        if (value == '__open__') {
-          onOpenFile();
-        } else {
-          onRecentFileSelected(value);
-        }
-      },
-      itemBuilder: (context) => [
-        const PopupMenuItem(
-          value: '__open__',
-          child: ListTile(
-            leading: Icon(Icons.folder_open),
-            title: Text('Open File...'),
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-          ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.folder_open),
+          tooltip: 'Open file',
+          onPressed: onOpenFile,
         ),
-        if (recentFiles.isNotEmpty) const PopupMenuDivider(),
-        ...recentFiles.take(10).map((path) => PopupMenuItem(
-          value: path,
-          child: Text(
-            p.basename(path),
-            overflow: TextOverflow.ellipsis,
+        if (recents.isNotEmpty)
+          PopupMenuButton<String>(
+            tooltip: 'Recent files',
+            position: PopupMenuPosition.over,
+            icon: const Icon(Icons.arrow_drop_down),
+            onSelected: onRecentFileSelected,
+            itemBuilder: (context) => recents.map((path) {
+              final name = p.basename(path).trim();
+              return PopupMenuItem(
+                value: path,
+                child: Text(
+                  name.isEmpty ? path : name,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
           ),
-        )),
       ],
-      child: const Padding(
-        padding: EdgeInsets.all(8.0),
-        child: Icon(Icons.folder_open),
-      ),
     );
   }
 }

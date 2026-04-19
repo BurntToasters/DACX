@@ -149,7 +149,7 @@ function printSummary({
   deleted,
   skipped,
 }) {
-  console.log(`DACX gitprune`);
+  console.log(`Dacx gitprune`);
   console.log(`Script Version: ${SCRIPT_VERSION}`);
   console.log(`Remote: ${remote}`);
   console.log(`Current branch: ${currentBranch}`);

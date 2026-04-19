@@ -18,8 +18,24 @@ import '../widgets/transport_controls.dart';
 import 'settings_screen.dart';
 
 const _audioExtensions = {
-  'mp3', 'flac', 'wav', 'ogg', 'aac', 'm4a', 'wma', 'opus', 'ape', 'alac',
+  'mp3',
+  'flac',
+  'wav',
+  'ogg',
+  'aac',
+  'm4a',
+  'wma',
+  'opus',
+  'ape',
+  'alac',
 };
+
+const _macOpenFileMethodChannel = MethodChannel(
+  'run.rosie.dacx/open_file/methods',
+);
+const _macOpenFileEventChannel = EventChannel(
+  'run.rosie.dacx/open_file/events',
+);
 
 class PlayerScreen extends StatefulWidget {
   final SettingsService settings;
@@ -52,7 +68,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   static const _supportedExtensions = {
     ..._audioExtensions,
-    'mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv', 'flv', 'm4v',
+    'mp4',
+    'mkv',
+    'avi',
+    'webm',
+    'mov',
+    'wmv',
+    'flv',
+    'm4v',
   };
 
   final List<StreamSubscription> _subscriptions = [];
@@ -105,13 +128,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     // Listen for settings changes (speed, loop, always-on-top).
     _settings.addListener(_onSettingsChanged);
+    _initializePlatformFileOpenBridge();
 
     _checkForUpdates();
 
     // Auto-open CLI file.
     if (widget.initialFile != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadFile(widget.initialFile!);
+        unawaited(_openRequestedFile(widget.initialFile!));
       });
     }
   }
@@ -130,6 +154,54 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _applySpeed(_settings.speed);
     _applyLoopMode(_settings.loopMode);
     windowManager.setAlwaysOnTop(_settings.alwaysOnTop);
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _initializePlatformFileOpenBridge() {
+    if (!Platform.isMacOS) return;
+
+    _subscriptions.add(
+      _macOpenFileEventChannel.receiveBroadcastStream().listen((event) {
+        final path = _coerceOpenPath(event);
+        if (path != null) {
+          unawaited(_openRequestedFile(path));
+        }
+      }, onError: (_) {}),
+    );
+
+    unawaited(_drainPendingMacOpenFiles());
+  }
+
+  Future<void> _drainPendingMacOpenFiles() async {
+    try {
+      final pending = await _macOpenFileMethodChannel.invokeListMethod<dynamic>(
+        'getPendingFiles',
+      );
+      if (pending == null || pending.isEmpty) return;
+      for (final entry in pending) {
+        final path = _coerceOpenPath(entry);
+        if (path == null) continue;
+        await _openRequestedFile(path);
+      }
+    } on PlatformException {
+      // Ignore if the native bridge is unavailable.
+    } catch (_) {}
+  }
+
+  String? _coerceOpenPath(dynamic value) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    return trimmed;
+  }
+
+  Future<void> _openRequestedFile(String filePath) async {
+    final trimmed = filePath.trim();
+    if (trimmed.isEmpty) return;
+    if (_currentFile == trimmed) return;
+    await _loadFile(trimmed);
   }
 
   void _applySpeed(double speed) {
@@ -177,7 +249,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _showUpdateSnackbar(UpdateInfo update) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('DACX v${update.version} is available'),
+        content: Text('Dacx v${update.version} is available'),
         duration: const Duration(seconds: 10),
         action: SnackBarAction(
           label: 'View',
@@ -190,16 +262,40 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // ── File handling ─────────────────────────────────────────
 
   Future<void> _openFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: [
-        'mp3', 'flac', 'wav', 'ogg', 'aac', 'm4a', 'wma', 'opus',
-        'mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv', 'flv', 'm4v',
-      ],
-    );
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        lockParentWindow: true,
+        allowMultiple: false,
+      );
 
-    if (result != null && result.files.single.path != null) {
-      _loadFile(result.files.single.path!);
+      if (result == null) return;
+      final path = result.files.single.path;
+      if (path == null || path.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not read selected file path.')),
+          );
+        }
+        return;
+      }
+
+      await _loadFile(path);
+    } on PlatformException catch (e) {
+      if (mounted) {
+        final detail = e.message?.trim().isNotEmpty == true
+            ? e.message!.trim()
+            : e.code;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('File picker failed: $detail')));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open file picker.')),
+        );
+      }
     }
   }
 
@@ -207,9 +303,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final ext = p.extension(filePath).toLowerCase().replaceFirst('.', '');
     if (!_supportedExtensions.contains(ext)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unsupported file type: .$ext')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Unsupported file type: .$ext')));
       }
       return;
     }
@@ -229,10 +325,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } catch (e) {
       if (gen != _loadGen) return;
       if (mounted) {
-        setState(() { _currentFile = null; _isAudioFile = false; });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to open file: $e')),
-        );
+        setState(() {
+          _currentFile = null;
+          _isAudioFile = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to open file: $e')));
       }
     }
   }
@@ -249,9 +348,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _openSettings() {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SettingsScreen(settings: _settings),
-      ),
+      MaterialPageRoute(builder: (_) => SettingsScreen(settings: _settings)),
     );
   }
 
@@ -262,6 +359,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
+    final hk = HardwareKeyboard.instance;
+
+    if (event is KeyDownEvent &&
+        (hk.isMetaPressed || hk.isControlPressed) &&
+        key == LogicalKeyboardKey.keyO) {
+      _openFile();
+      return KeyEventResult.handled;
+    }
 
     if (key == LogicalKeyboardKey.space) {
       if (_currentFile != null) {
@@ -337,110 +442,120 @@ class _PlayerScreenState extends State<PlayerScreen> {
             const CustomTitleBar(),
             Expanded(
               child: DropTarget(
-          onDragEntered: (_) => setState(() => _isDragging = true),
-          onDragExited: (_) => setState(() => _isDragging = false),
-          onDragDone: _onDragDone,
-          child: Column(
-            children: [
-              // Video / Audio art / Drop zone
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
+                onDragEntered: (_) => setState(() => _isDragging = true),
+                onDragExited: (_) => setState(() => _isDragging = false),
+                onDragDone: _onDragDone,
+                child: Column(
                   children: [
-                    if (_currentFile == null)
-                      _buildDropZone()
-                    else if (!_isAudioFile || _hasVideoOutput)
-                      Video(
-                        controller: _videoController,
-                        controls: NoVideoControls,
-                      )
-                    else
-                      _buildAudioBackground(),
-                    if (_isDragging)
-                      Container(
-                        color: Colors.blue.withValues(alpha: 0.3),
-                        child: const Center(
-                          child: Icon(Icons.file_download, size: 64, color: Colors.white),
+                    // Video / Audio art / Drop zone
+                    Expanded(
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (_currentFile == null)
+                            _buildDropZone()
+                          else if (!_isAudioFile || _hasVideoOutput)
+                            Video(
+                              controller: _videoController,
+                              controls: NoVideoControls,
+                            )
+                          else
+                            _buildAudioBackground(),
+                          if (_isDragging)
+                            Container(
+                              color: Colors.blue.withValues(alpha: 0.3),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.file_download,
+                                  size: 64,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    // Seek bar
+                    if (_duration.inMilliseconds > 0)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Row(
+                          children: [
+                            Text(
+                              _formatDuration(_position),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            Expanded(
+                              child: Slider(
+                                value: _position.inMilliseconds
+                                    .toDouble()
+                                    .clamp(
+                                      0.0,
+                                      _duration.inMilliseconds.toDouble(),
+                                    ),
+                                max: _duration.inMilliseconds.toDouble(),
+                                onChangeStart: (_) => _isSeeking = true,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _position = Duration(
+                                      milliseconds: value.toInt(),
+                                    );
+                                  });
+                                },
+                                onChangeEnd: (value) {
+                                  _isSeeking = false;
+                                  _playerService.seek(
+                                    Duration(milliseconds: value.toInt()),
+                                  );
+                                },
+                              ),
+                            ),
+                            Text(
+                              _formatDuration(_duration),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                         ),
                       ),
+                    // Transport controls
+                    TransportControls(
+                      isPlaying: _isPlaying,
+                      volume: _volume,
+                      hasMedia: _currentFile != null,
+                      speed: _settings.speed,
+                      loopMode: _settings.loopMode,
+                      recentFiles: _settings.recentFiles,
+                      onPlayPause: () async {
+                        try {
+                          await _playerService.playPause();
+                        } catch (_) {}
+                      },
+                      onStop: () async {
+                        await _playerService.stop();
+                        setState(() {
+                          _currentFile = null;
+                          _isAudioFile = false;
+                          _hasVideoOutput = false;
+                          _position = Duration.zero;
+                          _duration = Duration.zero;
+                        });
+                      },
+                      onOpenFile: _openFile,
+                      onVolumeChanged: (vol) async {
+                        try {
+                          await _playerService.setVolume(vol);
+                          _settings.volume = vol;
+                        } catch (_) {}
+                      },
+                      onLoopModeChanged: (mode) {
+                        _settings.loopMode = mode;
+                      },
+                      onRecentFileSelected: _loadRecentFile,
+                      onSettingsPressed: _openSettings,
+                    ),
                   ],
                 ),
               ),
-              // Seek bar
-              if (_duration.inMilliseconds > 0)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Row(
-                    children: [
-                      Text(
-                        _formatDuration(_position),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      Expanded(
-                        child: Slider(
-                          value: _position.inMilliseconds.toDouble().clamp(
-                            0.0,
-                            _duration.inMilliseconds.toDouble(),
-                          ),
-                          max: _duration.inMilliseconds.toDouble(),
-                          onChangeStart: (_) => _isSeeking = true,
-                          onChanged: (value) {
-                            setState(() {
-                              _position = Duration(milliseconds: value.toInt());
-                            });
-                          },
-                          onChangeEnd: (value) {
-                            _isSeeking = false;
-                            _playerService.seek(
-                              Duration(milliseconds: value.toInt()),
-                            );
-                          },
-                        ),
-                      ),
-                      Text(
-                        _formatDuration(_duration),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-              // Transport controls
-              TransportControls(
-                isPlaying: _isPlaying,
-                volume: _volume,
-                hasMedia: _currentFile != null,
-                speed: _settings.speed,
-                loopMode: _settings.loopMode,
-                recentFiles: _settings.recentFiles,
-                onPlayPause: () async {
-                  try { await _playerService.playPause(); } catch (_) {}
-                },
-                onStop: () async {
-                  await _playerService.stop();
-                  setState(() {
-                    _currentFile = null;
-                    _isAudioFile = false;
-                    _hasVideoOutput = false;
-                    _position = Duration.zero;
-                    _duration = Duration.zero;
-                  });
-                },
-                onOpenFile: _openFile,
-                onVolumeChanged: (vol) async {
-                  try {
-                    await _playerService.setVolume(vol);
-                    _settings.volume = vol;
-                  } catch (_) {}
-                },
-                onLoopModeChanged: (mode) {
-                  _settings.loopMode = mode;
-                },
-                onRecentFileSelected: _loadRecentFile,
-                onSettingsPressed: _openSettings,
-              ),
-            ],
-          ),
-        ),
             ),
           ],
         ),
@@ -462,7 +577,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           Text(
             'Drop a file here or click Open',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: 24),
@@ -477,7 +594,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildAudioBackground() {
-    final fileName = _currentFile != null ? p.basenameWithoutExtension(_currentFile!) : '';
+    final fileName = _currentFile != null
+        ? p.basenameWithoutExtension(_currentFile!)
+        : '';
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
@@ -485,10 +604,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            colorScheme.surface,
-            colorScheme.surfaceContainerHighest,
-          ],
+          colors: [colorScheme.surface, colorScheme.surfaceContainerHighest],
         ),
       ),
       child: Center(

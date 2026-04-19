@@ -81,7 +81,7 @@ function main() {
   const arch = detectArch();
   const distDir = path.join(root, "dist");
   fs.mkdirSync(distDir, { recursive: true });
-  const bundlePath = path.join(distDir, `DACX-Linux-${arch}.flatpak`);
+  const bundlePath = path.join(distDir, `Dacx-Linux-${arch}.flatpak`);
 
   run("flatpak", [
     "build-bundle",

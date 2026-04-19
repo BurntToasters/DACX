@@ -111,7 +111,7 @@ function printMacXcodeInstallHelp() {
 // Win
 
 function setupWindows() {
-  header('DACX — Windows setup');
+  header('Dacx — Windows setup');
 
   // Flutter
   if (!resolveFlutterOnWindowsPath()) {
@@ -144,7 +144,7 @@ function setupWindows() {
 // macOS
 
 function setupMac() {
-  header('DACX — macOS setup');
+  header('Dacx — macOS setup');
 
   // Xcode CLI tools
   console.log('\nChecking Xcode command-line tools...');
@@ -206,7 +206,7 @@ function setupMac() {
 // Linux
 
 function setupLinux() {
-  header('DACX — Linux setup (apt-based)');
+  header('Dacx — Linux setup (apt-based)');
 
   // System packages for Flutter desktop + media_kit (libmpv)
   const packages = [
