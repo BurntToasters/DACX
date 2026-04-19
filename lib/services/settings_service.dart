@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -161,8 +160,9 @@ class SettingsService extends ChangeNotifier {
   void addRecentFile(String path) {
     final files = recentFiles..remove(path);
     files.insert(0, path);
-    if (files.length > maxRecentFiles)
+    if (files.length > maxRecentFiles) {
       files.removeRange(maxRecentFiles, files.length);
+    }
     _prefs.setString(_kRecentFiles, jsonEncode(files));
   }
 
@@ -191,9 +191,8 @@ class SettingsService extends ChangeNotifier {
   String get hwDec {
     final stored = _prefs.getString(_kHwDec);
     if (stored != null) return stored;
-    // media_kit_video may crash with GPU rendering on recent macOS builds.
-    // Default to software rendering on macOS unless user explicitly opts in.
-    return Platform.isMacOS ? 'no' : 'auto';
+    // Prefer automatic hardware acceleration on fresh installs.
+    return 'auto';
   }
 
   set hwDec(String v) {

@@ -9,6 +9,15 @@ import 'package:window_manager/window_manager.dart';
 import 'screens/player_screen.dart';
 import 'services/settings_service.dart';
 
+class _NoBounceScrollBehavior extends MaterialScrollBehavior {
+  const _NoBounceScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const ClampingScrollPhysics();
+  }
+}
+
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
@@ -168,6 +177,7 @@ class _DacxAppState extends State<DacxApp> with WindowListener {
     return MaterialApp(
       title: 'Dacx',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const _NoBounceScrollBehavior(),
       themeMode: s.themeMode,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

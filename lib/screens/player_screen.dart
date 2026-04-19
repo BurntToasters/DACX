@@ -210,8 +210,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   bool _shouldEnableHardwareAcceleration(String hwDec) {
     if (hwDec == 'no') return false;
-    // Work around macOS OpenGL crashes in media_kit_video on newer macOS.
-    if (Platform.isMacOS) return false;
     return true;
   }
 
