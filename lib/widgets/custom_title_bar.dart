@@ -55,7 +55,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
       },
       child: Container(
         height: isMac ? 38 : 32,
-        color: Theme.of(context).scaffoldBackgroundColor,
+        color: Colors.transparent,
         child: Row(
           children: [
             // On macOS, leave space for native traffic light buttons.

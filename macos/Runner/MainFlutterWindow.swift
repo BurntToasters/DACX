@@ -6,12 +6,8 @@ class MainFlutterWindow: NSWindow {
     titleVisibility = .hidden
     titlebarAppearsTransparent = true
     isMovableByWindowBackground = true
-    backgroundColor = NSColor(
-      calibratedRed: 14.0 / 255.0,
-      green: 20.0 / 255.0,
-      blue: 27.0 / 255.0,
-      alpha: 1.0
-    )
+    isOpaque = false
+    backgroundColor = .clear
 
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame

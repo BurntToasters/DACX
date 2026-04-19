@@ -409,13 +409,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListTile(
       title: const Text('Open source licenses'),
       leading: const Icon(Icons.description_outlined),
-      onTap: () {
-        showLicensePage(
-          context: context,
-          applicationName: 'Dacx',
-          applicationLegalese: '© 2026 run.rosie\nLicensed under GPLv3',
-        );
-      },
+      onTap: _openLicenses,
+    );
+  }
+
+  void _openLicenses() {
+    final base = Theme.of(context);
+    final colorScheme = base.colorScheme;
+    final opaqueSurface = colorScheme.surface;
+
+    final licenseTheme = base.copyWith(
+      scaffoldBackgroundColor: opaqueSurface,
+      canvasColor: opaqueSurface,
+      cardColor: opaqueSurface,
+      appBarTheme: base.appBarTheme.copyWith(
+        backgroundColor: opaqueSurface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leadingWidth: Platform.isMacOS ? 144 : base.appBarTheme.leadingWidth,
+      ),
+    );
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Theme(
+          data: licenseTheme,
+          child: const LicensePage(
+            applicationName: 'Dacx',
+            applicationLegalese: '© 2026 run.rosie\nLicensed under GPLv3',
+          ),
+        ),
+      ),
     );
   }
 

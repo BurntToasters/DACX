@@ -229,6 +229,15 @@ class _DacxAppState extends State<DacxApp>
       } catch (_) {}
 
       try {
+        if (Platform.isMacOS) {
+          try {
+            await Window.setWindowBackgroundColorToClear();
+            await Window.makeTitlebarTransparent();
+            await Window.enableFullSizeContentView();
+            await Window.hideTitle();
+          } catch (_) {}
+        }
+
         if (s.windowBlurEnabled) {
           final strength = s.windowBlurStrength;
           if (Platform.isWindows) {
@@ -243,9 +252,10 @@ class _DacxAppState extends State<DacxApp>
             );
           } else if (Platform.isMacOS) {
             final effect = switch (strength) {
-              < 0.34 => WindowEffect.titlebar,
-              < 0.67 => WindowEffect.sidebar,
-              _ => WindowEffect.hudWindow,
+              < 0.20 => WindowEffect.windowBackground,
+              < 0.40 => WindowEffect.sidebar,
+              < 0.60 => WindowEffect.hudWindow,
+              _ => WindowEffect.fullScreenUI,
             };
             await Window.setEffect(effect: effect, dark: _isDarkMode());
           } else {
@@ -295,7 +305,9 @@ class _DacxAppState extends State<DacxApp>
       seedColor: seed,
       brightness: Brightness.dark,
     );
-    final surfaceAlpha = s.windowBlurEnabled ? 0.82 : 1.0;
+    final surfaceAlpha = s.windowBlurEnabled
+        ? (0.88 - (s.windowBlurStrength * 0.55)).clamp(0.33, 0.88)
+        : 1.0;
 
     return MaterialApp(
       title: 'Dacx',

@@ -351,7 +351,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _openSettings() {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => SettingsScreen(settings: _settings)),
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 230),
+        reverseTransitionDuration: const Duration(milliseconds: 190),
+        pageBuilder: (_, _, _) => SettingsScreen(settings: _settings),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          final slide = Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(curved);
+          final showPushMask = animation.status == AnimationStatus.forward;
+          final maskColor = Theme.of(context).colorScheme.surface;
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              if (showPushMask) ColoredBox(color: maskColor),
+              SlideTransition(position: slide, child: child),
+            ],
+          );
+        },
+      ),
     );
   }
 
