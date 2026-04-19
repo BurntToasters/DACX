@@ -33,7 +33,7 @@
     "vi": "node scripts/vi.js",
     "b": "git fetch && git switch beta && npm run vi",
     "r": "git switch main && npm run vi && npm run gitprune:force",
-    "u": "npm update && npm run sync-version && npm run format && npm run test:all",
+    "u": "npm update && npm run sync-version && node scripts/update-metainfo.js && npm run format && npm run test:all",
     "win-compiler:x64": "powershell -NoProfile -ExecutionPolicy Bypass -NoExit -Command \"& 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1' -SkipAutomaticLocation\"",
     "win-compiler:arm64": "powershell -NoProfile -ExecutionPolicy Bypass -NoExit -Command \"& 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1' -SkipAutomaticLocation -Arch arm64 -HostArch amd64\"",
     "flatpak:bundle": "node scripts/flatpak-bundle.js",
