@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -161,6 +162,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _initializePlatformFileOpenBridge() {
     if (!Platform.isMacOS) return;
+    unawaited(_bootstrapMacOpenFileBridge());
+  }
+
+  Future<void> _bootstrapMacOpenFileBridge() async {
+    try {
+      final pending = await _macOpenFileMethodChannel.invokeListMethod<dynamic>(
+        'getPendingFiles',
+      );
+      if (pending != null && pending.isNotEmpty) {
+        for (final entry in pending) {
+          final path = _coerceOpenPath(entry);
+          if (path == null) continue;
+          await _openRequestedFile(path);
+        }
+      }
+    } on MissingPluginException {
+      return;
+    } on PlatformException {
+      // Ignore if the native bridge is unavailable.
+      return;
+    } catch (_) {}
 
     _subscriptions.add(
       _macOpenFileEventChannel.receiveBroadcastStream().listen((event) {
@@ -170,24 +192,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         }
       }, onError: (_) {}),
     );
-
-    unawaited(_drainPendingMacOpenFiles());
-  }
-
-  Future<void> _drainPendingMacOpenFiles() async {
-    try {
-      final pending = await _macOpenFileMethodChannel.invokeListMethod<dynamic>(
-        'getPendingFiles',
-      );
-      if (pending == null || pending.isEmpty) return;
-      for (final entry in pending) {
-        final path = _coerceOpenPath(entry);
-        if (path == null) continue;
-        await _openRequestedFile(path);
-      }
-    } on PlatformException {
-      // Ignore if the native bridge is unavailable.
-    } catch (_) {}
   }
 
   String? _coerceOpenPath(dynamic value) {
@@ -209,7 +213,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   bool _shouldEnableHardwareAcceleration(String hwDec) {
-    if (hwDec == 'no') return false;
+    if (hwDec == 'no' || hwDec == 'auto-safe') return false;
+    if (Platform.isMacOS && kDebugMode) return false;
     return true;
   }
 

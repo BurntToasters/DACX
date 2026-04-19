@@ -51,6 +51,9 @@ class SettingsService extends ChangeNotifier {
   static const _kUpdateCheck = 'update_check_enabled';
   static const _kLastUpdateCheck = 'update_last_check';
   static const _kHwDec = 'system_hwdec';
+  static const _kWindowOpacity = 'window_opacity';
+  static const _kWindowBlurEnabled = 'window_blur_enabled';
+  static const _kWindowBlurStrength = 'window_blur_strength';
 
   static const int maxRecentFiles = 20;
 
@@ -197,6 +200,35 @@ class SettingsService extends ChangeNotifier {
 
   set hwDec(String v) {
     _prefs.setString(_kHwDec, v);
+    notifyListeners();
+  }
+
+  double get windowOpacity {
+    final stored = _prefs.getDouble(_kWindowOpacity);
+    if (stored == null) return 1.0;
+    return stored.clamp(0.65, 1.0);
+  }
+
+  set windowOpacity(double value) {
+    _prefs.setDouble(_kWindowOpacity, value.clamp(0.65, 1.0));
+    notifyListeners();
+  }
+
+  bool get windowBlurEnabled => _prefs.getBool(_kWindowBlurEnabled) ?? false;
+
+  set windowBlurEnabled(bool value) {
+    _prefs.setBool(_kWindowBlurEnabled, value);
+    notifyListeners();
+  }
+
+  double get windowBlurStrength {
+    final stored = _prefs.getDouble(_kWindowBlurStrength);
+    if (stored == null) return 0.55;
+    return stored.clamp(0.0, 1.0);
+  }
+
+  set windowBlurStrength(double value) {
+    _prefs.setDouble(_kWindowBlurStrength, value.clamp(0.0, 1.0));
     notifyListeners();
   }
 

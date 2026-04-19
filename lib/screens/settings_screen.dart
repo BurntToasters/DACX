@@ -50,6 +50,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _sectionHeader('Appearance'),
                 _themeModeTile(),
                 _accentColorTile(colorScheme),
+                _windowOpacityTile(),
+                _windowBlurTile(),
+                _windowBlurStrengthTile(),
                 SwitchListTile(
                   title: const Text('Always on top'),
                   value: _s.alwaysOnTop,
@@ -214,6 +217,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         }).toList(),
       ),
+    );
+  }
+
+  Widget _windowOpacityTile() {
+    final opacity = _s.windowOpacity;
+    final percent = (opacity * 100).round();
+
+    return ListTile(
+      title: const Text('Window opacity'),
+      subtitle: Slider(
+        value: opacity,
+        min: 0.65,
+        max: 1.0,
+        divisions: 14,
+        label: '$percent%',
+        onChanged: (v) => setState(() => _s.windowOpacity = v),
+      ),
+      trailing: Text('$percent%'),
+    );
+  }
+
+  Widget _windowBlurTile() {
+    final isSupported = Platform.isWindows || Platform.isMacOS;
+
+    return SwitchListTile(
+      title: const Text('Background blur'),
+      subtitle: Text(
+        isSupported
+            ? 'Applies native blur behind app content'
+            : 'Not available on Linux',
+      ),
+      value: _s.windowBlurEnabled,
+      onChanged: isSupported
+          ? (v) => setState(() => _s.windowBlurEnabled = v)
+          : null,
+    );
+  }
+
+  Widget _windowBlurStrengthTile() {
+    final isSupported = Platform.isWindows || Platform.isMacOS;
+    final strength = _s.windowBlurStrength;
+    final percent = (strength * 100).round();
+
+    return ListTile(
+      title: const Text('Blur strength'),
+      subtitle: Slider(
+        value: strength,
+        min: 0.0,
+        max: 1.0,
+        divisions: 10,
+        label: '$percent%',
+        onChanged: isSupported && _s.windowBlurEnabled
+            ? (v) => setState(() => _s.windowBlurStrength = v)
+            : null,
+      ),
+      trailing: Text('$percent%'),
     );
   }
 
