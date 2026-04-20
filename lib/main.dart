@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'screens/player_screen.dart';
 import 'services/settings_service.dart';
+import 'theme/window_visuals.dart';
 
 class _NoBounceScrollBehavior extends MaterialScrollBehavior {
   const _NoBounceScrollBehavior();
@@ -242,12 +243,12 @@ class _DacxAppState extends State<DacxApp>
           final strength = s.windowBlurStrength;
           if (Platform.isWindows) {
             final dark = _isDarkMode();
-            final alpha = (100 + (strength * 110)).round().clamp(80, 210);
+            final alpha = (30 + (strength * 56)).round().clamp(24, 96);
             await Window.setEffect(
-              effect: WindowEffect.acrylic,
+              effect: WindowEffect.aero,
               color: dark
-                  ? Color.fromARGB(alpha, 22, 27, 34)
-                  : Color.fromARGB(alpha, 242, 244, 247),
+                  ? Color.fromARGB(alpha, 18, 22, 28)
+                  : Color.fromARGB(alpha, 250, 252, 255),
               dark: dark,
             );
           } else if (Platform.isMacOS) {
@@ -305,9 +306,16 @@ class _DacxAppState extends State<DacxApp>
       seedColor: seed,
       brightness: Brightness.dark,
     );
-    final surfaceAlpha = s.windowBlurEnabled
-        ? (0.88 - (s.windowBlurStrength * 0.55)).clamp(0.33, 0.88)
-        : 1.0;
+    final lightVisuals = WindowVisuals.fromScheme(
+      lightScheme,
+      blurEnabled: s.windowBlurEnabled,
+      blurStrength: s.windowBlurStrength,
+    );
+    final darkVisuals = WindowVisuals.fromScheme(
+      darkScheme,
+      blurEnabled: s.windowBlurEnabled,
+      blurStrength: s.windowBlurStrength,
+    );
 
     return MaterialApp(
       title: 'Dacx',
@@ -317,19 +325,43 @@ class _DacxAppState extends State<DacxApp>
       theme: ThemeData(
         colorScheme: lightScheme,
         useMaterial3: true,
-        scaffoldBackgroundColor: lightScheme.surface.withValues(
-          alpha: surfaceAlpha,
+        scaffoldBackgroundColor: s.windowBlurEnabled
+            ? Colors.transparent
+            : lightVisuals.windowBottomColor,
+        canvasColor: lightVisuals.contentColor,
+        dividerColor: lightVisuals.dividerColor,
+        popupMenuTheme: PopupMenuThemeData(
+          color: lightVisuals.contentColor.withValues(
+            alpha: s.windowBlurEnabled ? 0.96 : 1.0,
+          ),
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: lightVisuals.borderColor),
+          ),
         ),
-        canvasColor: lightScheme.surface.withValues(alpha: surfaceAlpha),
+        extensions: [lightVisuals],
       ),
       darkTheme: ThemeData(
         colorScheme: darkScheme,
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: darkScheme.surface.withValues(
-          alpha: surfaceAlpha,
+        scaffoldBackgroundColor: s.windowBlurEnabled
+            ? Colors.transparent
+            : darkVisuals.windowBottomColor,
+        canvasColor: darkVisuals.contentColor,
+        dividerColor: darkVisuals.dividerColor,
+        popupMenuTheme: PopupMenuThemeData(
+          color: darkVisuals.contentColor.withValues(
+            alpha: s.windowBlurEnabled ? 0.96 : 1.0,
+          ),
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: darkVisuals.borderColor),
+          ),
         ),
-        canvasColor: darkScheme.surface.withValues(alpha: surfaceAlpha),
+        extensions: [darkVisuals],
       ),
       home: PlayerScreen(settings: s, initialFile: widget.initialFile),
     );

@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/settings_service.dart';
+import '../theme/window_visuals.dart';
 import '../services/update_service.dart';
 import '../widgets/custom_title_bar.dart';
 
@@ -34,101 +35,131 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final visuals = context.windowVisuals;
     final isDesktopCustomChrome = Platform.isMacOS || Platform.isWindows;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: isDesktopCustomChrome
           ? null
           : AppBar(title: const Text('Settings')),
-      body: Column(
-        children: [
-          if (isDesktopCustomChrome) const CustomTitleBar(),
-          if (isDesktopCustomChrome) _desktopHeader(context),
-          Expanded(
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 210),
-              curve: Curves.easeOutCubic,
-              opacity: _contentVisible ? 1 : 0,
-              child: AnimatedSlide(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                offset: _contentVisible ? Offset.zero : const Offset(0, 0.02),
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  children: [
-                    _sectionHeader('Playback'),
-                    _speedTile(),
-                    _loopModeTile(),
-                    SwitchListTile(
-                      title: const Text('Auto-play on file open'),
-                      value: _s.autoPlay,
-                      onChanged: (v) => setState(() => _s.autoPlay = v),
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [visuals.overlayColor, visuals.windowBottomColor],
+          ),
+        ),
+        child: Column(
+          children: [
+            if (isDesktopCustomChrome) const CustomTitleBar(),
+            if (isDesktopCustomChrome) _desktopHeader(context),
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: visuals.overlayColor,
+                  border: Border(top: BorderSide(color: visuals.dividerColor)),
+                ),
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 210),
+                  curve: Curves.easeOutCubic,
+                  opacity: _contentVisible ? 1 : 0,
+                  child: AnimatedSlide(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    offset: _contentVisible
+                        ? Offset.zero
+                        : const Offset(0, 0.02),
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      children: [
+                        _sectionHeader('Playback'),
+                        _speedTile(),
+                        _loopModeTile(),
+                        SwitchListTile(
+                          title: const Text('Auto-play on file open'),
+                          value: _s.autoPlay,
+                          onChanged: (v) => setState(() => _s.autoPlay = v),
+                        ),
+                        _hwDecTile(),
+                        const Divider(),
+                        _sectionHeader('Appearance'),
+                        _themeModeTile(),
+                        _accentColorTile(colorScheme),
+                        _windowOpacityTile(),
+                        _windowBlurTile(),
+                        _windowBlurStrengthTile(),
+                        SwitchListTile(
+                          title: const Text('Always on top'),
+                          value: _s.alwaysOnTop,
+                          onChanged: (v) => setState(() => _s.alwaysOnTop = v),
+                        ),
+                        SwitchListTile(
+                          title: const Text('Remember window size & position'),
+                          value: _s.rememberWindow,
+                          onChanged: (v) =>
+                              setState(() => _s.rememberWindow = v),
+                        ),
+                        const Divider(),
+                        _sectionHeader('General'),
+                        SwitchListTile(
+                          title: const Text('Check for updates on launch'),
+                          value: _s.updateCheckEnabled,
+                          onChanged: (v) =>
+                              setState(() => _s.updateCheckEnabled = v),
+                        ),
+                        _recentFilesTile(),
+                        _checkForUpdatesTile(),
+                        _keyboardShortcutsTile(),
+                        const Divider(),
+                        _resetTile(),
+                        const Divider(),
+                        _licensesTile(),
+                        _aboutTile(),
+                      ],
                     ),
-                    _hwDecTile(),
-                    const Divider(),
-                    _sectionHeader('Appearance'),
-                    _themeModeTile(),
-                    _accentColorTile(colorScheme),
-                    _windowOpacityTile(),
-                    _windowBlurTile(),
-                    _windowBlurStrengthTile(),
-                    SwitchListTile(
-                      title: const Text('Always on top'),
-                      value: _s.alwaysOnTop,
-                      onChanged: (v) => setState(() => _s.alwaysOnTop = v),
-                    ),
-                    SwitchListTile(
-                      title: const Text('Remember window size & position'),
-                      value: _s.rememberWindow,
-                      onChanged: (v) => setState(() => _s.rememberWindow = v),
-                    ),
-                    const Divider(),
-                    _sectionHeader('General'),
-                    SwitchListTile(
-                      title: const Text('Check for updates on launch'),
-                      value: _s.updateCheckEnabled,
-                      onChanged: (v) =>
-                          setState(() => _s.updateCheckEnabled = v),
-                    ),
-                    _recentFilesTile(),
-                    _checkForUpdatesTile(),
-                    _keyboardShortcutsTile(),
-                    const Divider(),
-                    _resetTile(),
-                    const Divider(),
-                    _licensesTile(),
-                    _aboutTile(),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _desktopHeader(BuildContext context) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back),
-            tooltip: 'Back',
-            onPressed: () => Navigator.of(context).maybePop(),
-          ),
-          const Expanded(
-            child: Center(
-              child: Text(
-                'Settings',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+    final visuals = context.windowVisuals;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: visuals.barColor,
+        border: Border(bottom: BorderSide(color: visuals.dividerColor)),
+      ),
+      child: SizedBox(
+        height: 48,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back',
+                onPressed: () => Navigator.of(context).maybePop(),
               ),
-            ),
+              const Expanded(
+                child: Center(
+                  child: Text(
+                    'Settings',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 48),
+            ],
           ),
-          const SizedBox(width: 48),
-        ],
+        ),
       ),
     );
   }
@@ -286,7 +317,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final percent = (strength * 100).round();
 
     return ListTile(
-      title: const Text('Blur strength'),
+      title: const Text('Glass strength'),
       subtitle: Slider(
         value: strength,
         min: 0.0,
