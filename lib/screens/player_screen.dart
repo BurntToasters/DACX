@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
@@ -360,8 +359,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         transitionsBuilder: (context, animation, _, child) {
           // Mask ramps up quickly to hide the player underneath the
           // semi-transparent settings scaffold when blur is active.
-          final maskOpacity = Curves.easeOut
-              .transform((animation.value / 0.45).clamp(0.0, 1.0));
+          final maskOpacity = Curves.easeOut.transform(
+            (animation.value / 0.45).clamp(0.0, 1.0),
+          );
           final zoom = CurvedAnimation(
             parent: animation,
             curve: Curves.easeOutCubic,
@@ -509,10 +509,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             layoutBuilder: (currentChild, previousChildren) {
                               return Stack(
                                 fit: StackFit.expand,
-                                children: [
-                                  ...previousChildren,
-                                  ?currentChild,
-                                ],
+                                children: [...previousChildren, ?currentChild],
                               );
                             },
                             transitionBuilder: (child, animation) {
@@ -569,8 +566,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 children: [
                                   Text(
                                     _formatDuration(_position),
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
                                   ),
                                   Expanded(
                                     child: Slider(
@@ -599,8 +597,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   ),
                                   Text(
                                     _formatDuration(_duration),
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
                                   ),
                                 ],
                               ),
@@ -750,5 +749,3 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 }
-
-

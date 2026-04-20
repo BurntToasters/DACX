@@ -123,7 +123,10 @@ class TransportControls extends StatelessWidget {
                     key: ValueKey<double>(speed),
                     padding: const EdgeInsets.only(left: 4),
                     child: Chip(
-                      label: Text('$speed×', style: const TextStyle(fontSize: 12)),
+                      label: Text(
+                        '$speed×',
+                        style: const TextStyle(fontSize: 12),
+                      ),
                       visualDensity: VisualDensity.compact,
                       padding: EdgeInsets.zero,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

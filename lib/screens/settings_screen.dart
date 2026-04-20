@@ -87,7 +87,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     SwitchListTile(
                       title: const Text('Check for updates on launch'),
                       value: _s.updateCheckEnabled,
-                      onChanged: (v) => setState(() => _s.updateCheckEnabled = v),
+                      onChanged: (v) =>
+                          setState(() => _s.updateCheckEnabled = v),
                     ),
                     _recentFilesTile(),
                     _checkForUpdatesTile(),
