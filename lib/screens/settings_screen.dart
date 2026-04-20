@@ -19,6 +19,17 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   SettingsService get _s => widget.settings;
+  bool _contentVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _contentVisible = true);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,51 +45,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (isDesktopCustomChrome) const CustomTitleBar(),
           if (isDesktopCustomChrome) _desktopHeader(context),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              children: [
-                _sectionHeader('Playback'),
-                _speedTile(),
-                _loopModeTile(),
-                SwitchListTile(
-                  title: const Text('Auto-play on file open'),
-                  value: _s.autoPlay,
-                  onChanged: (v) => setState(() => _s.autoPlay = v),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 210),
+              curve: Curves.easeOutCubic,
+              opacity: _contentVisible ? 1 : 0,
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                offset: _contentVisible ? Offset.zero : const Offset(0, 0.02),
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  children: [
+                    _sectionHeader('Playback'),
+                    _speedTile(),
+                    _loopModeTile(),
+                    SwitchListTile(
+                      title: const Text('Auto-play on file open'),
+                      value: _s.autoPlay,
+                      onChanged: (v) => setState(() => _s.autoPlay = v),
+                    ),
+                    _hwDecTile(),
+                    const Divider(),
+                    _sectionHeader('Appearance'),
+                    _themeModeTile(),
+                    _accentColorTile(colorScheme),
+                    _windowOpacityTile(),
+                    _windowBlurTile(),
+                    _windowBlurStrengthTile(),
+                    SwitchListTile(
+                      title: const Text('Always on top'),
+                      value: _s.alwaysOnTop,
+                      onChanged: (v) => setState(() => _s.alwaysOnTop = v),
+                    ),
+                    SwitchListTile(
+                      title: const Text('Remember window size & position'),
+                      value: _s.rememberWindow,
+                      onChanged: (v) => setState(() => _s.rememberWindow = v),
+                    ),
+                    const Divider(),
+                    _sectionHeader('General'),
+                    SwitchListTile(
+                      title: const Text('Check for updates on launch'),
+                      value: _s.updateCheckEnabled,
+                      onChanged: (v) => setState(() => _s.updateCheckEnabled = v),
+                    ),
+                    _recentFilesTile(),
+                    _checkForUpdatesTile(),
+                    _keyboardShortcutsTile(),
+                    const Divider(),
+                    _resetTile(),
+                    const Divider(),
+                    _licensesTile(),
+                    _aboutTile(),
+                  ],
                 ),
-                _hwDecTile(),
-                const Divider(),
-                _sectionHeader('Appearance'),
-                _themeModeTile(),
-                _accentColorTile(colorScheme),
-                _windowOpacityTile(),
-                _windowBlurTile(),
-                _windowBlurStrengthTile(),
-                SwitchListTile(
-                  title: const Text('Always on top'),
-                  value: _s.alwaysOnTop,
-                  onChanged: (v) => setState(() => _s.alwaysOnTop = v),
-                ),
-                SwitchListTile(
-                  title: const Text('Remember window size & position'),
-                  value: _s.rememberWindow,
-                  onChanged: (v) => setState(() => _s.rememberWindow = v),
-                ),
-                const Divider(),
-                _sectionHeader('General'),
-                SwitchListTile(
-                  title: const Text('Check for updates on launch'),
-                  value: _s.updateCheckEnabled,
-                  onChanged: (v) => setState(() => _s.updateCheckEnabled = v),
-                ),
-                _recentFilesTile(),
-                _checkForUpdatesTile(),
-                _keyboardShortcutsTile(),
-                const Divider(),
-                _resetTile(),
-                const Divider(),
-                _licensesTile(),
-                _aboutTile(),
-              ],
+              ),
             ),
           ),
         ],

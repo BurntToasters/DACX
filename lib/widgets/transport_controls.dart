@@ -66,7 +66,25 @@ class TransportControls extends StatelessWidget {
           _buildOpenButton(context),
           const SizedBox(width: 8),
           IconButton(
-            icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 170),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final scale = Tween<double>(
+                  begin: 0.86,
+                  end: 1.0,
+                ).animate(animation);
+                return FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: scale, child: child),
+                );
+              },
+              child: Icon(
+                isPlaying ? Icons.pause : Icons.play_arrow,
+                key: ValueKey<bool>(isPlaying),
+              ),
+            ),
             tooltip: isPlaying ? 'Pause' : 'Play',
             iconSize: 36,
             onPressed: hasMedia ? onPlayPause : null,
@@ -85,16 +103,34 @@ class TransportControls extends StatelessWidget {
             iconSize: 20,
           ),
           // Speed chip (visible when != 1.0)
-          if (speed != 1.0)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Chip(
-                label: Text('$speed×', style: const TextStyle(fontSize: 12)),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SizeTransition(
+                  axis: Axis.horizontal,
+                  axisAlignment: -1,
+                  sizeFactor: animation,
+                  child: child,
+                ),
+              );
+            },
+            child: speed != 1.0
+                ? Padding(
+                    key: ValueKey<double>(speed),
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Chip(
+                      label: Text('$speed×', style: const TextStyle(fontSize: 12)),
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  )
+                : const SizedBox(key: ValueKey('speed-empty')),
+          ),
           const Spacer(),
           // Volume
           Icon(volume == 0 ? Icons.volume_off : Icons.volume_up, size: 20),
