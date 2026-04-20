@@ -55,7 +55,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
       },
       child: Container(
         height: isMac ? 38 : 32,
-        color: colorScheme.surface,
+        color: Colors.transparent,
         child: Row(
           children: [
             // On macOS, leave space for native traffic light buttons.
@@ -145,17 +145,24 @@ class _WindowButtonState extends State<_WindowButton> {
       onExit: (_) => setState(() => _hovering = false),
       child: GestureDetector(
         onTap: widget.onPressed,
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
           width: 46,
           height: 32,
           color: _hovering ? widget.hoverColor : Colors.transparent,
           child: Center(
-            child: Icon(
-              widget.icon,
-              size: widget.iconSize,
-              color: _hovering && widget.hoverIconColor != null
-                  ? widget.hoverIconColor
-                  : widget.iconColor,
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 120),
+              curve: Curves.easeOutCubic,
+              scale: _hovering ? 1.05 : 1.0,
+              child: Icon(
+                widget.icon,
+                size: widget.iconSize,
+                color: _hovering && widget.hoverIconColor != null
+                    ? widget.hoverIconColor
+                    : widget.iconColor,
+              ),
             ),
           ),
         ),

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_acrylic/flutter_acrylic.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
@@ -9,9 +11,36 @@ import 'package:window_manager/window_manager.dart';
 import 'screens/player_screen.dart';
 import 'services/settings_service.dart';
 
+class _NoBounceScrollBehavior extends MaterialScrollBehavior {
+  const _NoBounceScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const ClampingScrollPhysics();
+  }
+}
+
+void _installKeyboardStateRecovery() {
+  final previousOnError = FlutterError.onError;
+  FlutterError.onError = (FlutterErrorDetails details) {
+    final text = details.exceptionAsString();
+    if (text.contains(
+          'A KeyDownEvent is dispatched, but the state shows that the physical key is already pressed',
+        ) ||
+        text.contains(
+          'A KeyUpEvent is dispatched, but the state shows that the physical key is not pressed',
+        )) {
+      unawaited(HardwareKeyboard.instance.syncKeyboardState());
+    }
+    previousOnError?.call(details);
+  };
+}
+
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  _installKeyboardStateRecovery();
   MediaKit.ensureInitialized();
+  await Window.initialize();
 
   final prefs = await SharedPreferences.getInstance();
   final settings = SettingsService(prefs);
@@ -27,7 +56,7 @@ void main(List<String> args) async {
     minimumSize: const Size(480, 320),
     center: savedPos == null,
     title: 'Dacx',
-    backgroundColor: const Color(0xFF0E141B),
+    backgroundColor: Colors.transparent,
     titleBarStyle: Platform.isWindows || Platform.isMacOS
         ? TitleBarStyle.hidden
         : TitleBarStyle.normal,
@@ -127,22 +156,126 @@ class DacxApp extends StatefulWidget {
   State<DacxApp> createState() => _DacxAppState();
 }
 
-class _DacxAppState extends State<DacxApp> with WindowListener {
+class _DacxAppState extends State<DacxApp>
+    with WindowListener, WidgetsBindingObserver {
+  bool _applyingWindowVisuals = false;
+  bool _pendingWindowVisuals = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     windowManager.addListener(this);
     widget.settings.addListener(_onSettingsChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_applyWindowVisualSettings());
+      unawaited(_syncKeyboardState());
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     windowManager.removeListener(this);
     widget.settings.removeListener(_onSettingsChanged);
     super.dispose();
   }
 
-  void _onSettingsChanged() => setState(() {});
+  void _onSettingsChanged() {
+    setState(() {});
+    unawaited(_applyWindowVisualSettings());
+  }
+
+  Future<void> _syncKeyboardState() async {
+    try {
+      await HardwareKeyboard.instance.syncKeyboardState();
+    } catch (_) {}
+  }
+
+  @override
+  void onWindowFocus() {
+    unawaited(_syncKeyboardState());
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    if (widget.settings.themeMode == ThemeMode.system) {
+      setState(() {});
+      unawaited(_applyWindowVisualSettings());
+    }
+  }
+
+  bool _isDarkMode() {
+    final mode = widget.settings.themeMode;
+    if (mode == ThemeMode.dark) return true;
+    if (mode == ThemeMode.light) return false;
+    return WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+        Brightness.dark;
+  }
+
+  Future<void> _applyWindowVisualSettings() async {
+    if (!mounted) return;
+    if (_applyingWindowVisuals) {
+      _pendingWindowVisuals = true;
+      return;
+    }
+    _applyingWindowVisuals = true;
+    do {
+      _pendingWindowVisuals = false;
+      final s = widget.settings;
+
+      try {
+        await windowManager.setOpacity(s.windowOpacity);
+      } catch (_) {}
+
+      try {
+        if (Platform.isMacOS) {
+          try {
+            await Window.setWindowBackgroundColorToClear();
+            await Window.makeTitlebarTransparent();
+            await Window.enableFullSizeContentView();
+            await Window.hideTitle();
+          } catch (_) {}
+        }
+
+        if (s.windowBlurEnabled) {
+          final strength = s.windowBlurStrength;
+          if (Platform.isWindows) {
+            final dark = _isDarkMode();
+            final alpha = (100 + (strength * 110)).round().clamp(80, 210);
+            await Window.setEffect(
+              effect: WindowEffect.acrylic,
+              color: dark
+                  ? Color.fromARGB(alpha, 22, 27, 34)
+                  : Color.fromARGB(alpha, 242, 244, 247),
+              dark: dark,
+            );
+          } else if (Platform.isMacOS) {
+            final effect = switch (strength) {
+              < 0.20 => WindowEffect.windowBackground,
+              < 0.40 => WindowEffect.sidebar,
+              < 0.60 => WindowEffect.hudWindow,
+              _ => WindowEffect.fullScreenUI,
+            };
+            await Window.setEffect(effect: effect, dark: _isDarkMode());
+          } else {
+            await Window.setEffect(
+              effect: WindowEffect.disabled,
+              color: Colors.transparent,
+              dark: _isDarkMode(),
+            );
+          }
+        } else {
+          await Window.setEffect(
+            effect: WindowEffect.disabled,
+            color: Colors.transparent,
+            dark: _isDarkMode(),
+          );
+        }
+      } catch (_) {}
+    } while (_pendingWindowVisuals && mounted);
+    _applyingWindowVisuals = false;
+  }
 
   // ── WindowListener ───────────────────────────────────────
 
@@ -164,25 +297,39 @@ class _DacxAppState extends State<DacxApp> with WindowListener {
   Widget build(BuildContext context) {
     final s = widget.settings;
     final seed = s.accentColor.color;
+    final lightScheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.light,
+    );
+    final darkScheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.dark,
+    );
+    final surfaceAlpha = s.windowBlurEnabled
+        ? (0.88 - (s.windowBlurStrength * 0.55)).clamp(0.33, 0.88)
+        : 1.0;
 
     return MaterialApp(
       title: 'Dacx',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const _NoBounceScrollBehavior(),
       themeMode: s.themeMode,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: seed,
-          brightness: Brightness.light,
-        ),
+        colorScheme: lightScheme,
         useMaterial3: true,
+        scaffoldBackgroundColor: lightScheme.surface.withValues(
+          alpha: surfaceAlpha,
+        ),
+        canvasColor: lightScheme.surface.withValues(alpha: surfaceAlpha),
       ),
       darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: seed,
-          brightness: Brightness.dark,
-        ),
+        colorScheme: darkScheme,
         useMaterial3: true,
         brightness: Brightness.dark,
+        scaffoldBackgroundColor: darkScheme.surface.withValues(
+          alpha: surfaceAlpha,
+        ),
+        canvasColor: darkScheme.surface.withValues(alpha: surfaceAlpha),
       ),
       home: PlayerScreen(settings: s, initialFile: widget.initialFile),
     );

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -161,6 +162,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _initializePlatformFileOpenBridge() {
     if (!Platform.isMacOS) return;
+    unawaited(_bootstrapMacOpenFileBridge());
+  }
+
+  Future<void> _bootstrapMacOpenFileBridge() async {
+    try {
+      final pending = await _macOpenFileMethodChannel.invokeListMethod<dynamic>(
+        'getPendingFiles',
+      );
+      if (pending != null && pending.isNotEmpty) {
+        for (final entry in pending) {
+          final path = _coerceOpenPath(entry);
+          if (path == null) continue;
+          await _openRequestedFile(path);
+        }
+      }
+    } on MissingPluginException {
+      return;
+    } on PlatformException {
+      // Ignore if the native bridge is unavailable.
+      return;
+    } catch (_) {}
 
     _subscriptions.add(
       _macOpenFileEventChannel.receiveBroadcastStream().listen((event) {
@@ -170,24 +192,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         }
       }, onError: (_) {}),
     );
-
-    unawaited(_drainPendingMacOpenFiles());
-  }
-
-  Future<void> _drainPendingMacOpenFiles() async {
-    try {
-      final pending = await _macOpenFileMethodChannel.invokeListMethod<dynamic>(
-        'getPendingFiles',
-      );
-      if (pending == null || pending.isEmpty) return;
-      for (final entry in pending) {
-        final path = _coerceOpenPath(entry);
-        if (path == null) continue;
-        await _openRequestedFile(path);
-      }
-    } on PlatformException {
-      // Ignore if the native bridge is unavailable.
-    } catch (_) {}
   }
 
   String? _coerceOpenPath(dynamic value) {
@@ -209,9 +213,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   bool _shouldEnableHardwareAcceleration(String hwDec) {
-    if (hwDec == 'no') return false;
-    // Work around macOS OpenGL crashes in media_kit_video on newer macOS.
-    if (Platform.isMacOS) return false;
+    if (hwDec == 'no' || hwDec == 'auto-safe') return false;
+    if ((Platform.isMacOS || Platform.isLinux) && kDebugMode) return false;
     return true;
   }
 
@@ -348,7 +351,54 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _openSettings() {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => SettingsScreen(settings: _settings)),
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 340),
+        reverseTransitionDuration: const Duration(milliseconds: 280),
+        pageBuilder: (_, _, _) => SettingsScreen(settings: _settings),
+        opaque: false,
+        transitionsBuilder: (context, animation, _, child) {
+          // Mask ramps up quickly to hide the player underneath the
+          // semi-transparent settings scaffold when blur is active.
+          final maskOpacity = Curves.easeOut.transform(
+            (animation.value / 0.45).clamp(0.0, 1.0),
+          );
+          final zoom = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          final fade = Tween<double>(begin: 0.0, end: 1.0).animate(
+            CurvedAnimation(
+              parent: animation,
+              curve: const Interval(0.0, 0.65, curve: Curves.easeOut),
+              reverseCurve: const Interval(0.0, 0.5, curve: Curves.easeIn),
+            ),
+          );
+          final scale = Tween<double>(begin: 0.94, end: 1.0).animate(zoom);
+          final settleOffset = Tween<Offset>(
+            begin: const Offset(0, 0.018),
+            end: Offset.zero,
+          ).animate(zoom);
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              ColoredBox(
+                color: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: maskOpacity),
+              ),
+              FadeTransition(
+                opacity: fade,
+                child: SlideTransition(
+                  position: settleOffset,
+                  child: ScaleTransition(scale: scale, child: child),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -452,71 +502,113 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          if (_currentFile == null)
-                            _buildDropZone()
-                          else if (!_isAudioFile || _hasVideoOutput)
-                            Video(
-                              controller: _videoController,
-                              controls: NoVideoControls,
-                            )
-                          else
-                            _buildAudioBackground(),
-                          if (_isDragging)
-                            Container(
-                              color: Colors.blue.withValues(alpha: 0.3),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.file_download,
-                                  size: 64,
-                                  color: Colors.white,
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 240),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            layoutBuilder: (currentChild, previousChildren) {
+                              return Stack(
+                                fit: StackFit.expand,
+                                children: [...previousChildren, ?currentChild],
+                              );
+                            },
+                            transitionBuilder: (child, animation) {
+                              final fade = CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              );
+                              final scale = Tween<double>(
+                                begin: 0.985,
+                                end: 1.0,
+                              ).animate(fade);
+                              return FadeTransition(
+                                opacity: fade,
+                                child: ScaleTransition(
+                                  scale: scale,
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: _buildMediaSurface(),
+                          ),
+                          IgnorePointer(
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 140),
+                              curve: Curves.easeOutCubic,
+                              opacity: _isDragging ? 1 : 0,
+                              child: Container(
+                                color: Colors.blue.withValues(alpha: 0.3),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.file_download,
+                                    size: 64,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                             ),
+                          ),
                         ],
                       ),
                     ),
                     // Seek bar
-                    if (_duration.inMilliseconds > 0)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Row(
-                          children: [
-                            Text(
-                              _formatDuration(_position),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            Expanded(
-                              child: Slider(
-                                value: _position.inMilliseconds
-                                    .toDouble()
-                                    .clamp(
-                                      0.0,
-                                      _duration.inMilliseconds.toDouble(),
-                                    ),
-                                max: _duration.inMilliseconds.toDouble(),
-                                onChangeStart: (_) => _isSeeking = true,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _position = Duration(
-                                      milliseconds: value.toInt(),
-                                    );
-                                  });
-                                },
-                                onChangeEnd: (value) {
-                                  _isSeeking = false;
-                                  _playerService.seek(
-                                    Duration(milliseconds: value.toInt()),
-                                  );
-                                },
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 190),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.topCenter,
+                      child: _duration.inMilliseconds > 0
+                          ? Padding(
+                              key: const ValueKey('seek-visible'),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
                               ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    _formatDuration(_position),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                  Expanded(
+                                    child: Slider(
+                                      value: _position.inMilliseconds
+                                          .toDouble()
+                                          .clamp(
+                                            0.0,
+                                            _duration.inMilliseconds.toDouble(),
+                                          ),
+                                      max: _duration.inMilliseconds.toDouble(),
+                                      onChangeStart: (_) => _isSeeking = true,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _position = Duration(
+                                            milliseconds: value.toInt(),
+                                          );
+                                        });
+                                      },
+                                      onChangeEnd: (value) {
+                                        _isSeeking = false;
+                                        _playerService.seek(
+                                          Duration(milliseconds: value.toInt()),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatDuration(_duration),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            )
+                          : const SizedBox(
+                              key: ValueKey('seek-hidden'),
+                              width: double.infinity,
                             ),
-                            Text(
-                              _formatDuration(_duration),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
+                    ),
                     // Transport controls
                     TransportControls(
                       isPlaying: _isPlaying,
@@ -590,6 +682,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMediaSurface() {
+    if (_currentFile == null) {
+      return KeyedSubtree(
+        key: const ValueKey('media-drop-zone'),
+        child: _buildDropZone(),
+      );
+    }
+
+    if (!_isAudioFile || _hasVideoOutput) {
+      return Container(
+        key: const ValueKey('media-video'),
+        color: Colors.black,
+        child: Video(controller: _videoController, controls: NoVideoControls),
+      );
+    }
+
+    return KeyedSubtree(
+      key: const ValueKey('media-audio'),
+      child: _buildAudioBackground(),
     );
   }
 

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -52,6 +51,9 @@ class SettingsService extends ChangeNotifier {
   static const _kUpdateCheck = 'update_check_enabled';
   static const _kLastUpdateCheck = 'update_last_check';
   static const _kHwDec = 'system_hwdec';
+  static const _kWindowOpacity = 'window_opacity';
+  static const _kWindowBlurEnabled = 'window_blur_enabled';
+  static const _kWindowBlurStrength = 'window_blur_strength';
 
   static const int maxRecentFiles = 20;
 
@@ -161,8 +163,9 @@ class SettingsService extends ChangeNotifier {
   void addRecentFile(String path) {
     final files = recentFiles..remove(path);
     files.insert(0, path);
-    if (files.length > maxRecentFiles)
+    if (files.length > maxRecentFiles) {
       files.removeRange(maxRecentFiles, files.length);
+    }
     _prefs.setString(_kRecentFiles, jsonEncode(files));
   }
 
@@ -191,13 +194,41 @@ class SettingsService extends ChangeNotifier {
   String get hwDec {
     final stored = _prefs.getString(_kHwDec);
     if (stored != null) return stored;
-    // media_kit_video may crash with GPU rendering on recent macOS builds.
-    // Default to software rendering on macOS unless user explicitly opts in.
-    return Platform.isMacOS ? 'no' : 'auto';
+    // Prefer automatic hardware acceleration on fresh installs.
+    return 'auto';
   }
 
   set hwDec(String v) {
     _prefs.setString(_kHwDec, v);
+    notifyListeners();
+  }
+
+  double get windowOpacity {
+    final stored = _prefs.getDouble(_kWindowOpacity);
+    if (stored == null) return 1.0;
+    return stored.clamp(0.65, 1.0);
+  }
+
+  set windowOpacity(double value) {
+    _prefs.setDouble(_kWindowOpacity, value.clamp(0.65, 1.0));
+    notifyListeners();
+  }
+
+  bool get windowBlurEnabled => _prefs.getBool(_kWindowBlurEnabled) ?? false;
+
+  set windowBlurEnabled(bool value) {
+    _prefs.setBool(_kWindowBlurEnabled, value);
+    notifyListeners();
+  }
+
+  double get windowBlurStrength {
+    final stored = _prefs.getDouble(_kWindowBlurStrength);
+    if (stored == null) return 0.55;
+    return stored.clamp(0.0, 1.0);
+  }
+
+  set windowBlurStrength(double value) {
+    _prefs.setDouble(_kWindowBlurStrength, value.clamp(0.0, 1.0));
     notifyListeners();
   }
 
