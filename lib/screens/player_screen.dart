@@ -1076,35 +1076,41 @@ class _PlayerScreenState extends State<PlayerScreen> {
       );
     }
 
-    if (!_isAudioFile || _hasVideoOutput || _hasAlbumArtTrack) {
-      return Container(
-        key: const ValueKey('media-video'),
-        color: Colors.black,
-        child: Video(controller: _videoController, controls: NoVideoControls),
+    if (_isAudioFile) {
+      final showAlbumArt = _hasAlbumArtTrack && _hasVideoOutput;
+      return KeyedSubtree(
+        key: ValueKey(showAlbumArt ? 'media-audio-with-art' : 'media-audio'),
+        child: _buildAudioBackground(showAlbumArt: showAlbumArt),
       );
     }
 
-    return KeyedSubtree(
-      key: const ValueKey('media-audio'),
-      child: _buildAudioBackground(),
+    return Container(
+      key: const ValueKey('media-video'),
+      color: Colors.black,
+      child: Video(controller: _videoController, controls: NoVideoControls),
     );
   }
 
-  Widget _buildAudioBackground() {
+  Widget _buildAudioBackground({required bool showAlbumArt}) {
     final fileName = _currentFile != null
         ? p.basenameWithoutExtension(_currentFile!)
         : '';
     final colorScheme = Theme.of(context).colorScheme;
+    final shortestSide = MediaQuery.sizeOf(context).shortestSide;
+    final albumArtSize = shortestSide.clamp(220.0, 360.0).toDouble();
 
     return Center(
       child: _buildCenterPanel(
         maxWidth: 700,
         children: [
-          _buildCenterIconSurface(
-            icon: Icons.album,
-            size: 54,
-            color: colorScheme.primary.withValues(alpha: 0.88),
-          ),
+          if (showAlbumArt)
+            _buildAlbumArtSurface(size: albumArtSize)
+          else
+            _buildCenterIconSurface(
+              icon: Icons.album,
+              size: 54,
+              color: colorScheme.primary.withValues(alpha: 0.88),
+            ),
           const SizedBox(height: 24),
           Text(
             fileName,
@@ -1124,6 +1130,38 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAlbumArtSurface({required double size}) {
+    final visuals = context.windowVisuals;
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: visuals.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: visuals.shadowColor,
+            blurRadius: 24,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: ColoredBox(
+          color: visuals.contentColor,
+          child: Video(
+            controller: _videoController,
+            controls: NoVideoControls,
+            fit: BoxFit.cover,
+            fill: Colors.transparent,
+          ),
+        ),
       ),
     );
   }
