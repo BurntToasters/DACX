@@ -57,6 +57,7 @@ class SettingsService extends ChangeNotifier {
   static const _kExperimentalFeaturesEnabled = 'experimental_features_enabled';
   static const _kLinuxCompositorBlurExperimental =
       'linux_compositor_blur_experimental';
+  static const _kDebugModeEnabled = 'debug_mode_enabled';
 
   static const int maxRecentFiles = 20;
 
@@ -248,6 +249,13 @@ class SettingsService extends ChangeNotifier {
 
   set linuxCompositorBlurExperimental(bool value) {
     _prefs.setBool(_kLinuxCompositorBlurExperimental, value);
+    notifyListeners();
+  }
+
+  bool get debugModeEnabled => _prefs.getBool(_kDebugModeEnabled) ?? false;
+
+  set debugModeEnabled(bool value) {
+    _prefs.setBool(_kDebugModeEnabled, value);
     notifyListeners();
   }
 

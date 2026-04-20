@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'screens/player_screen.dart';
+import 'services/debug_log_service.dart';
 import 'services/settings_service.dart';
 import 'theme/window_visuals.dart';
 
@@ -46,6 +47,7 @@ void main(List<String> args) async {
 
   final prefs = await SharedPreferences.getInstance();
   final settings = SettingsService(prefs);
+  final debugLog = DebugLogService(isEnabled: () => settings.debugModeEnabled);
 
   await windowManager.ensureInitialized();
 
@@ -93,7 +95,7 @@ void main(List<String> args) async {
   // Collect CLI file argument (first non-flag arg).
   final cliFile = _parseCliFilePath(args);
 
-  runApp(DacxApp(settings: settings, initialFile: cliFile));
+  runApp(DacxApp(settings: settings, debugLog: debugLog, initialFile: cliFile));
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (!firstFrameReady.isCompleted) {
@@ -150,9 +152,15 @@ String? _normalizeCliPath(String value) {
 
 class DacxApp extends StatefulWidget {
   final SettingsService settings;
+  final DebugLogService debugLog;
   final String? initialFile;
 
-  const DacxApp({super.key, required this.settings, this.initialFile});
+  const DacxApp({
+    super.key,
+    required this.settings,
+    required this.debugLog,
+    this.initialFile,
+  });
 
   @override
   State<DacxApp> createState() => _DacxAppState();
@@ -174,6 +182,14 @@ class _DacxAppState extends State<DacxApp>
   @override
   void initState() {
     super.initState();
+    widget.debugLog.logLazy(
+      category: DebugLogCategory.system,
+      event: 'app_init',
+      detailsBuilder: () => {
+        'platform': Platform.operatingSystem,
+        'initial_file_present': widget.initialFile != null,
+      },
+    );
     WidgetsBinding.instance.addObserver(this);
     windowManager.addListener(this);
     widget.settings.addListener(_onSettingsChanged);
@@ -196,6 +212,15 @@ class _DacxAppState extends State<DacxApp>
   }
 
   void _onSettingsChanged() {
+    widget.debugLog.logLazy(
+      category: DebugLogCategory.system,
+      event: 'settings_changed_notification',
+      detailsBuilder: () => {
+        'theme_mode': widget.settings.themeMode.name,
+        'always_on_top': widget.settings.alwaysOnTop,
+        'experimental_features': widget.settings.experimentalFeaturesEnabled,
+      },
+    );
     setState(() {});
     unawaited(_applyWindowVisualSettings());
   }
@@ -312,6 +337,19 @@ class _DacxAppState extends State<DacxApp>
           );
         }
       } catch (_) {}
+      if (widget.debugLog.isEnabled) {
+        widget.debugLog.logLazy(
+          category: DebugLogCategory.system,
+          event: 'window_visuals_applied',
+          detailsBuilder: () => {
+            'experimental_enabled': experimentalEnabled,
+            'blur_enabled': blurEnabled,
+            'bypass_native_opacity': bypassNativeOpacity,
+            'effective_opacity': effectiveOpacity.toStringAsFixed(3),
+            'blur_strength': s.windowBlurStrength.toStringAsFixed(3),
+          },
+        );
+      }
     } while (_pendingWindowVisuals && mounted);
     _applyingWindowVisuals = false;
   }
@@ -409,7 +447,11 @@ class _DacxAppState extends State<DacxApp>
         ),
         extensions: [darkVisuals],
       ),
-      home: PlayerScreen(settings: s, initialFile: widget.initialFile),
+      home: PlayerScreen(
+        settings: s,
+        debugLog: widget.debugLog,
+        initialFile: widget.initialFile,
+      ),
     );
   }
 }
