@@ -35,6 +35,15 @@ test('rejects a beta banner for stable release notes', () => {
   assert.equal(failures.some((failure) => failure.includes('beta-build banner')), true);
 });
 
+test('ignores a historical beta banner inside an HTML comment', () => {
+  const notes = [
+    '<!-- > [!NOTE]',
+    '> This is a Beta build. -->',
+    notesFor('0.12.0', '> [!IMPORTANT]\n> Stable release'),
+  ].join('\n');
+  assert.deepEqual(validateReleaseNotes(notes, '0.12.0'), []);
+});
+
 test('requires the one-time v0.11.0 recovery advisory in v0.11.1 notes', () => {
   const failures = validateReleaseNotes(notesFor('0.11.1'), '0.11.1');
   assert.equal(failures.some((failure) => failure.includes('manual-upgrade advisory')), true);
