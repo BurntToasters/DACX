@@ -734,14 +734,12 @@ function writeWindowsWixV4Source(buildDir, wxsPath, audioIconFileName) {
     return lines;
   }
 
-  const appIconPath = path.join(
-    root,
-    "windows",
-    "runner",
-    "resources",
-    "app_icon.ico",
-  );
-  const hasAppIcon = fs.existsSync(appIconPath);
+  const appIconCandidates = [
+    path.join(root, "assets", "icon", "icon.ico"),
+    path.join(root, "windows", "runner", "resources", "app_icon.ico"),
+  ];
+  const appIconPath = appIconCandidates.find((p) => fs.existsSync(p));
+  const hasAppIcon = appIconPath != null;
   const msiVersion = toMsiVersion(VERSION);
   const iconBlock = hasAppIcon
     ? [

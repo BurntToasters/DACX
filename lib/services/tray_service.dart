@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'package:path/path.dart' as p;
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -19,26 +17,27 @@ class TrayService with TrayListener {
   bool _initialized = false;
   String _showLabel = 'Show Dacx';
   String _quitLabel = 'Quit';
-  String? _cachedIconPath;
 
   static bool get isSupported =>
       !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
   bool get isInitialized => _initialized;
 
-  /// Materialize the bundled PNG into a temp file (tray APIs need a disk path).
-  Future<String> _resolveIconPath() async {
-    if (_cachedIconPath != null && File(_cachedIconPath!).existsSync()) {
-      return _cachedIconPath!;
+  /// Bundled asset path passed to [trayManager.setIcon] (relative to flutter_assets).
+  ///
+  /// Windows loads icons via `LoadImage` with [IMAGE_ICON], so a multi-size `.ico`
+  /// is required. macOS uses a monochrome template PNG for the menu bar.
+  @visibleForTesting
+  static String trayIconAssetPath({bool? isWindows, bool? isMacOS}) {
+    final onWindows = isWindows ?? Platform.isWindows;
+    final onMacOS = isMacOS ?? Platform.isMacOS;
+    if (onWindows) {
+      return 'assets/icon/icon.ico';
     }
-    final data = await rootBundle.load('assets/icon/icon.png');
-    final out = File(p.join(Directory.systemTemp.path, 'dacx_tray_icon.png'));
-    await out.writeAsBytes(
-      data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-      flush: true,
-    );
-    _cachedIconPath = out.path;
-    return out.path;
+    if (onMacOS) {
+      return 'assets/icon/tray_icon_template.png';
+    }
+    return 'assets/icon/icon.png';
   }
 
   Future<void> init({
@@ -53,8 +52,16 @@ class TrayService with TrayListener {
       return;
     }
     try {
-      final icon = await _resolveIconPath();
-      await trayManager.setIcon(icon);
+      final iconPath = trayIconAssetPath();
+      if (Platform.isMacOS) {
+        await trayManager.setIcon(
+          iconPath,
+          isTemplate: true,
+          iconSize: 22,
+        );
+      } else {
+        await trayManager.setIcon(iconPath);
+      }
       await trayManager.setToolTip('Dacx');
       await _applyMenu();
       trayManager.addListener(this);
