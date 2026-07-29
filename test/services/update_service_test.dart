@@ -425,22 +425,25 @@ void main() {
       },
     );
 
-    test('beta channel returns release html_url, not rosie.run', () async {
-      final svc = UpdateService(
-        packageInfoLoader: () async => info('0.7.4-beta.1'),
-        httpGet: (uri, {headers}) async => http.Response(
-          '[{"tag_name":"v0.7.4-beta.2","html_url":"https://github.com/BurntToasters/Dacx/releases/tag/v0.7.4-beta.2","body":"","prerelease":true,"draft":false}]',
-          200,
-        ),
-      );
-      final update = await svc.checkForUpdate(channel: UpdateChannel.beta);
-      expect(
-        update?.url,
-        'https://github.com/BurntToasters/Dacx/releases/tag/v0.7.4-beta.2',
-      );
-    });
+    test(
+      'beta manual fallback targets exact prerelease, not latest stable',
+      () async {
+        final svc = UpdateService(
+          packageInfoLoader: () async => info('0.7.4-beta.1'),
+          httpGet: (uri, {headers}) async => http.Response(
+            '[{"tag_name":"v0.7.4-beta.2","html_url":"https://github.com/BurntToasters/Dacx/releases/tag/v0.7.4-beta.2","body":"","prerelease":true,"draft":false}]',
+            200,
+          ),
+        );
+        final update = await svc.checkForUpdate(channel: UpdateChannel.beta);
+        expect(
+          update?.url,
+          'https://github.com/BurntToasters/Dacx/releases/tag/v0.7.4-beta.2',
+        );
+      },
+    );
 
-    test('stable channel still returns rosie.run url', () async {
+    test('stable manual fallback uses rosie.run update route', () async {
       final svc = UpdateService(
         packageInfoLoader: () async => info('0.5.0'),
         httpGet: (uri, {headers}) async => http.Response(

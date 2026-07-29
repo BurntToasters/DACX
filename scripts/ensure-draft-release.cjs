@@ -7,6 +7,10 @@
 const https = require('https');
 
 require('dotenv').config();
+const {
+  assertValidReleaseNotes,
+  readReleaseNotes,
+} = require('./release-notes.cjs');
 
 const GH_TOKEN = process.env.GH_TOKEN;
 const REPO_OWNER = 'BurntToasters';
@@ -31,6 +35,8 @@ const packageJson = require('../package.json');
 const VERSION = packageJson.version;
 const TAG_NAME = 'v' + VERSION;
 const IS_PRERELEASE = VERSION.includes('beta') || VERSION.includes('alpha');
+const RELEASE_BODY = readReleaseNotes();
+assertValidReleaseNotes(RELEASE_BODY, VERSION);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -190,8 +196,19 @@ async function ensureDraftRelease() {
 
   const existing = await findExistingRelease();
   if (existing) {
+    if (existing.draft && existing.body !== RELEASE_BODY) {
+      console.log('   Draft exists but release notes differ; updating body...');
+      return await githubRequestWithRetry(
+        'PATCH',
+        '/repos/' + REPO_OWNER + '/' + REPO_NAME + '/releases/' + existing.id,
+        {
+          body: RELEASE_BODY,
+          prerelease: IS_PRERELEASE,
+        }
+      );
+    }
     console.log(
-      '   Draft already exists: ' +
+      (existing.draft ? '   Draft already exists: ' : '   Published release already exists: ') +
         (existing.name || TAG_NAME) +
         ' (id ' +
         existing.id +
@@ -214,6 +231,7 @@ async function ensureDraftRelease() {
         name: VERSION,
         draft: true,
         prerelease: IS_PRERELEASE,
+        body: RELEASE_BODY,
       }
     );
     console.log('   Created draft release: ' + (release.name || TAG_NAME) + ' (id ' + release.id + ')');

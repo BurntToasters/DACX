@@ -12,5 +12,6 @@
     "UDZO",
     "volname",
     "xcrun"
-  ]
+  ],
+  "dart.flutterSdkPath": ".fvm/flutter_sdk"
 }

@@ -33,7 +33,7 @@ String unsupportedPlatformUpdateMessage(AppLocalizations l10n) {
 /// Snackbar/Settings entry point. On Win/Mac shows the install progress
 /// dialog and exits the app on a successful spawn so the helper/watchdog
 /// can replace files. On other platforms (or when self-update is
-/// unavailable) opens the release page in the browser instead.
+/// unavailable) opens the browser-based manual download page instead.
 Future<void> triggerUpdateAction({
   required BuildContext context,
   required UpdateInfo info,
@@ -56,7 +56,7 @@ Future<void> triggerUpdateAction({
     builder: (_) => UpdateProgressDialog(
       info: info,
       service: SelfUpdateService(debugLog: debugLog),
-      onFallbackToBrowser: () => updateService.openReleasePage(info.url),
+      onManualDownload: () => updateService.openReleasePage(info.url),
     ),
   );
   if (result?.outcome == SelfUpdateOutcome.spawned) {
@@ -76,12 +76,12 @@ class UpdateProgressDialog extends StatefulWidget {
     super.key,
     required this.info,
     required this.service,
-    required this.onFallbackToBrowser,
+    required this.onManualDownload,
   });
 
   final UpdateInfo info;
   final SelfUpdateService service;
-  final VoidCallback onFallbackToBrowser;
+  final VoidCallback onManualDownload;
 
   @override
   State<UpdateProgressDialog> createState() => _UpdateProgressDialogState();
@@ -207,10 +207,10 @@ class _UpdateProgressDialogState extends State<UpdateProgressDialog> {
       actions: [
         TextButton(
           onPressed: () {
-            widget.onFallbackToBrowser();
+            widget.onManualDownload();
             Navigator.of(context).pop(result);
           },
-          child: Text(l10n.updateDialogOpenReleasePage),
+          child: Text(l10n.updateDialogDownloadManually),
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(result),

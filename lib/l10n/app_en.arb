@@ -356,7 +356,7 @@
   "updateDialogDownloading": "Downloading...",
   "updateDialogWillClose": "Dacx will close to apply the update.",
   "updateDialogFailedTitle": "Update failed",
-  "updateDialogOpenReleasePage": "Open release page",
+  "updateDialogDownloadManually": "Download the update manually",
   "updateActionInstall": "Install",
   "updateActionView": "View",
 

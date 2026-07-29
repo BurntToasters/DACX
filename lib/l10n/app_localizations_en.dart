@@ -888,7 +888,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateDialogFailedTitle => 'Update failed';
 
   @override
-  String get updateDialogOpenReleasePage => 'Open release page';
+  String get updateDialogDownloadManually => 'Download the update manually';
 
   @override
   String get updateActionInstall => 'Install';

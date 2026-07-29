@@ -56,6 +56,18 @@ function run({ now = new Date() } = {}) {
   const releaseIndent = `${baseIndent}  `;
   const newReleaseTag = `${releaseIndent}<release version="${version}" date="${dateStr}"/>`;
 
+  function refreshReleaseTag(rawTag) {
+    const tag = rawTag.trim();
+    const versionMatch = tag.match(/version="([^"]+)"/);
+    const tagVersion = versionMatch ? versionMatch[1] : "";
+    if (tagVersion !== version) return tag;
+
+    if (tag.includes("</release>")) {
+      return tag.replace(/\bdate="[^"]*"/, `date="${dateStr}"`);
+    }
+    return `<release version="${version}" date="${dateStr}"/>`;
+  }
+
   const releasesSectionRegex = /<releases>[\s\S]*?<\/releases>/;
   const releasesSectionMatch = xml.match(releasesSectionRegex);
   if (!releasesSectionMatch) {
@@ -76,7 +88,7 @@ function run({ now = new Date() } = {}) {
 
     if (tagVersion === version) {
       if (!replacedCurrentVersion) {
-        rebuiltEntries.push(newReleaseTag.trim());
+        rebuiltEntries.push(refreshReleaseTag(tag));
         replacedCurrentVersion = true;
       }
       continue;

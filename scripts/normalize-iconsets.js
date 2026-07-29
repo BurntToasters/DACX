@@ -8,8 +8,10 @@
  * Source:  assets/icon/icon.png  (1024×1024 recommended)
  *
  * Outputs:
- *   Windows: windows/runner/resources/app_icon.ico  (multi-size ICO)
+ *   Windows: assets/icon/icon.ico  (multi-size ICO from icon.png)
+ *            windows/runner/resources/app_icon.ico  (copy: exe, MSI, tray)
  *   macOS:   macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_*.png
+ *           assets/icon/tray_icon_template.png  (menu bar template)
  *   Linux:   linux/packaging/icons/  (hicolor sizes)
  */
 
@@ -45,31 +47,42 @@ function hasMagick() {
   }
 }
 
-// Windows: multi-size .ico via ImageMagick
+// Windows: multi-size .ico via ImageMagick (exe, installer, system tray)
+
+/** @type {number[]} DPI-friendly sizes for Windows 10/11 shell + tray */
+const WIN_ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256];
+
+function magickWindowsIcoCommand(outPath) {
+  if (process.platform === "win32") {
+    const layers = WIN_ICO_SIZES.map(
+      (s) => `( "${SOURCE}" -resize ${s}x${s} )`,
+    ).join(" ");
+    return `magick ${layers} "${outPath}"`;
+  }
+  const layers = WIN_ICO_SIZES.map(
+    (s) => `\\( "${SOURCE}" -resize ${s}x${s} \\)`,
+  ).join(" ");
+  return `magick ${layers} "${outPath}"`;
+}
 
 function generateWindows() {
   console.log("\n── Windows ──");
-  const outDir = path.join(root, "windows", "runner", "resources");
-  ensureDir(outDir);
-  const ico = path.join(outDir, "app_icon.ico");
-
-  // ICO embeds 16, 24, 32, 48, 64, 128, 256
-  const sizes = [16, 24, 32, 48, 64, 128, 256];
-  const resizeArgs = sizes
-    .map((s) => `\\( "${SOURCE}" -resize ${s}x${s} \\)`)
-    .join(" ");
-
-  // On Windows, magick uses parentheses differently
-  if (process.platform === "win32") {
-    const winArgs = sizes
-      .map((s) => `( "${SOURCE}" -resize ${s}x${s} )`)
-      .join(" ");
-    run(`magick ${winArgs} "${ico}"`);
-  } else {
-    run(`magick ${resizeArgs} "${ico}"`);
-  }
-
-  console.log(`  ✓ ${path.relative(root, ico)}`);
+  const canonical = path.join(root, "assets", "icon", "icon.ico");
+  const runnerIco = path.join(
+    root,
+    "windows",
+    "runner",
+    "resources",
+    "app_icon.ico",
+  );
+  ensureDir(path.dirname(canonical));
+  ensureDir(path.dirname(runnerIco));
+  run(magickWindowsIcoCommand(canonical));
+  fs.copyFileSync(canonical, runnerIco);
+  console.log(`  ✓ ${path.relative(root, canonical)}`);
+  console.log(
+    `  ✓ ${path.relative(root, runnerIco)} (Runner.rc + WiX; same bytes as icon.ico)`,
+  );
 }
 
 // macOS: individual PNGs for AppIcon.appiconset
@@ -93,6 +106,24 @@ function generateMacOS() {
     run(`magick "${SOURCE}" -resize ${s}x${s} "${outFile}"`);
     console.log(`  ✓ app_icon_${s}.png`);
   }
+}
+
+// macOS menu bar: black template PNG (transparent background)
+
+function generateTrayTemplate() {
+  console.log("\n── macOS tray template ──");
+  const out = path.join(root, "assets", "icon", "tray_icon_template.png");
+  ensureDir(path.dirname(out));
+  // Flood-fill the app-icon background, then force RGB to black (keep alpha).
+  const floodfill =
+    '-fuzz 22% -fill none -draw "color 64,10 floodfill" ' +
+    "-channel RGB -evaluate set 0 +channel";
+  if (process.platform === "win32") {
+    run(`magick "${SOURCE}" -resize 128x128 ${floodfill} "${out}"`);
+  } else {
+    run(`magick "${SOURCE}" -resize 128x128 ${floodfill} "${out}"`);
+  }
+  console.log(`  ✓ ${path.relative(root, out)}`);
 }
 
 // Linux: hicolor icon theme PNGs
@@ -188,6 +219,7 @@ function main() {
 
   generateWindows();
   generateMacOS();
+  generateTrayTemplate();
   generateMacOSDocumentIcons();
   generateLinux();
 

@@ -59,7 +59,7 @@ void main() {
           UpdateProgressDialog(
             info: _info,
             service: service,
-            onFallbackToBrowser: () {},
+            onManualDownload: () {},
           ),
         ),
       );
@@ -97,7 +97,7 @@ void main() {
           UpdateProgressDialog(
             info: _info,
             service: service,
-            onFallbackToBrowser: () {},
+            onManualDownload: () {},
           ),
         ),
       );
@@ -152,7 +152,7 @@ void main() {
               key: ValueKey(entry.key),
               info: _info,
               service: service,
-              onFallbackToBrowser: () {},
+              onManualDownload: () {},
             ),
           ),
         );
@@ -178,7 +178,7 @@ void main() {
             key: const ValueKey('unsupported'),
             info: _info,
             service: unsupportedService,
-            onFallbackToBrowser: () {},
+            onManualDownload: () {},
           ),
         ),
       );
@@ -197,7 +197,7 @@ void main() {
       }
     });
 
-    testWidgets('open release page action invokes fallback and closes dialog', (
+    testWidgets('manual download action invokes fallback and closes dialog', (
       tester,
     ) async {
       var fallbackCalled = false;
@@ -211,13 +211,13 @@ void main() {
           UpdateProgressDialog(
             info: _info,
             service: service,
-            onFallbackToBrowser: () => fallbackCalled = true,
+            onManualDownload: () => fallbackCalled = true,
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Open release page'));
+      await tester.tap(find.text('Download the update manually'));
       await tester.pumpAndSettle();
 
       expect(fallbackCalled, isTrue);

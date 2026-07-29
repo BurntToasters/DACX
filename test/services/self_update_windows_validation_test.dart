@@ -284,12 +284,18 @@ void main() {
       );
       final result = await svc.validateWindowsInstallerSignatureForTesting(msi);
       expect(result.outcome, SelfUpdateOutcome.spawned);
+      final joined = invokedArguments?.join(' ') ?? '';
       expect(
-        invokedArguments?.join(' '),
+        joined,
         contains(
           r'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1',
         ),
       );
+      // Path must be embedded in -Command; trailing argv is not $args for
+      // PowerShell -Command <string> and previously made LiteralPath null.
+      expect(joined, contains(msi.path));
+      expect(joined, isNot(contains(r'$args[0]')));
+      expect(invokedArguments, isNot(contains(msi.path)));
     });
 
     test('returns signatureInvalid when PowerShell exits non-zero', () async {
@@ -303,6 +309,28 @@ void main() {
       final result = await svc.validateWindowsInstallerSignatureForTesting(msi);
       expect(result.outcome, SelfUpdateOutcome.signatureInvalid);
       expect(result.message, contains('access denied'));
+    });
+  });
+
+  group('SelfUpdateService.buildWindowsAuthenticodeCommand', () {
+    test('embeds MSI path and escapes single quotes', () {
+      final command = SelfUpdateService.buildWindowsAuthenticodeCommand(
+        r"C:\Users\O'Brien\AppData\Local\Dacx\updates\Dacx.msi",
+      );
+      expect(
+        command,
+        contains(
+          r"Get-AuthenticodeSignature -LiteralPath 'C:\Users\O''Brien\AppData\Local\Dacx\updates\Dacx.msi'",
+        ),
+      );
+      expect(command, isNot(contains(r'$args[0]')));
+    });
+
+    test('escapePowerShellSingleQuoted doubles apostrophes', () {
+      expect(
+        SelfUpdateService.escapePowerShellSingleQuoted("a'b'c"),
+        "a''b''c",
+      );
     });
   });
 }

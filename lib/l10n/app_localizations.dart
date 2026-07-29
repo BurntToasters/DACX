@@ -1636,11 +1636,11 @@ abstract class AppLocalizations {
   /// **'Update failed'**
   String get updateDialogFailedTitle;
 
-  /// No description provided for @updateDialogOpenReleasePage.
+  /// No description provided for @updateDialogDownloadManually.
   ///
   /// In en, this message translates to:
-  /// **'Open release page'**
-  String get updateDialogOpenReleasePage;
+  /// **'Download the update manually'**
+  String get updateDialogDownloadManually;
 
   /// No description provided for @updateActionInstall.
   ///

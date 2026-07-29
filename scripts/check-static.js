@@ -5,7 +5,7 @@
  * otherwise blow up partway through a release build.
  *
  * Steps:
- *  1. `node --check` on every scripts/*.js
+ *  1. `node --check` on every scripts/*.js and scripts/*.cjs
  *  2. JSON.parse on package.json + analysis_options sidecars
  *  3. Validate metainfo XML: well-formed; required tags present; release
  *     entries are version-sorted descending; current version present
@@ -31,7 +31,7 @@ function rel(p) {
 const scriptsDir = path.join(root, "scripts");
 const jsFiles = fs
   .readdirSync(scriptsDir)
-  .filter((f) => f.endsWith(".js"))
+  .filter((f) => f.endsWith(".js") || f.endsWith(".cjs"))
   .map((f) => path.join(scriptsDir, f));
 for (const file of jsFiles) {
   const r = spawnSync(process.execPath, ["--check", file], {

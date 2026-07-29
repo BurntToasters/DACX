@@ -5,12 +5,13 @@ Thanks for helping improve Dacx.
 ## Development setup
 
 1. Install Node.js 22+, Dart (for FVM), and platform build deps per [README.md](README.md).
-2. `npm ci && npm run setup:flutter`
-3. `fvm flutter pub get`
-4. Run locally: `npm run dev` (or `dev:win` / `dev:mac` / `dev:linux`)
+2. `npm ci && npm run setup:flutter` — installs or repairs the global `fvm` CLI, pins and verifies the exact Flutter SDK from `.fvmrc`, then runs one explicit `flutter pub get` and regenerates l10n (`gen-l10n`). Re-run this if you see `Invalid kernel binary format version` from FVM.
+3. Run locally: `npm run dev` (or `dev:win` / `dev:mac` / `dev:linux`)
 
 Run every project Flutter or Dart command through FVM: `fvm flutter ...` or
 `fvm dart ...`. Never call the system `flutter` or `dart` directly.
+
+VS Code / Cursor uses `"dart.flutterSdkPath": ".fvm/flutter_sdk"` (see `.vscode/settings.json`). That symlink is recreated when you bump `.fvmrc` and run `npm run setup:flutter` or `fvm use`; you do not edit the version number in settings by hand.
 
 ## Quality gates (run before opening a PR)
 
@@ -18,11 +19,16 @@ Run every project Flutter or Dart command through FVM: `fvm flutter ...` or
 npm run test:all
 ```
 
-This runs version sync, static checks, hygiene, analyze, format, unit tests, coverage, and a build smoke. Coverage gates (`scripts/check-coverage.js`): overall minimum **40%**; scoped (non-required sources) minimum **55%**. Required sources (`player_screen`) must appear in the lcov report but are excluded from the scoped gate. CI runs a subset plus multi-OS build smoke on `main` and `beta` only (and `v*` tags); interim branches are skipped to save minutes.
+This runs version sync, static checks, hygiene, analyze, format, unit tests, coverage, and a build smoke. Coverage gates (`scripts/check-coverage.js`): overall minimum **40%**; scoped (non-required sources) minimum **55%**. Required sources (`player_screen`) must appear in the lcov report but are excluded from the scoped gate. CI runs a subset plus multi-OS build smoke on `main` and `beta` only; interim branches and tags are skipped to save minutes.
 
 Before a stable cut, run the manual checklist in [docs/QA.md](docs/QA.md).
 
 `release:prepare` intentionally does **not** run a clean-tree / branch guard; maintainers release from the branch they are on after `release:warn`. Keep the working tree intentional; do not assume an automated guard.
+
+`release:prepare` validates `CHANGELOG.md` against the package version.
+`release:draft` then copies it into the GitHub draft body. If the matching draft
+already exists, its body is refreshed; an already-published release is never
+rewritten.
 
 Before packaging a release, `release:prepare` runs `npm run licenses` to refresh
 `build/THIRD_PARTY_NOTICES.txt` (copied into installers by `package-release.js`).

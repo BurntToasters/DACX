@@ -32,6 +32,7 @@ function createInitialResults() {
     coverage: { status: "pending" },
     "build-smoke": { status: "pending" },
     outdated: { status: "pending" },
+    cacert: { status: "pending" },
   };
 }
 
@@ -150,6 +151,7 @@ ${colors.reset}`);
   console.log(`${colors.bold}Coverage:${colors.reset}     ${fmt("coverage")}`);
   console.log(`${colors.bold}Build smoke:${colors.reset}  ${fmt("build-smoke")}`);
   console.log(`${colors.bold}Outdated:${colors.reset}     ${fmt("outdated")}`);
+  console.log(`${colors.bold}CA bundle:${colors.reset}   ${fmt("cacert")}`);
 
   console.log("");
   if (allPassed) {
@@ -246,6 +248,15 @@ function main() {
       null,
       results,
     );
+  }
+
+  if (process.env.DACX_SKIP_CACERT_CHECK === "1") {
+    results.cacert.status = "skipped";
+    console.log(
+      `${colors.blue}⏭  cacert skipped (DACX_SKIP_CACERT_CHECK=1)${colors.reset}\n`,
+    );
+  } else {
+    runCommand("cacert", "node", ["scripts/check-cacert.js"], null, results);
   }
 
   return printSummary(results);

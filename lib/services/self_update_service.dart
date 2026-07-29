@@ -872,6 +872,34 @@ class SelfUpdateService {
     return hash.toLowerCase();
   }
 
+  /// Escapes a path for use inside a PowerShell single-quoted string.
+  @visibleForTesting
+  static String escapePowerShellSingleQuoted(String value) {
+    return value.replaceAll("'", "''");
+  }
+
+  /// Builds the `-Command` script that reads Authenticode for [msiPath].
+  ///
+  /// The MSI path is embedded in the script. PowerShell's `-Command <string>`
+  /// form does **not** populate `$args` from trailing process argv (so
+  /// `-LiteralPath $args[0]` always sees null and breaks Windows self-update).
+  @visibleForTesting
+  static String buildWindowsAuthenticodeCommand(String msiPath) {
+    final pathLiteral = escapePowerShellSingleQuoted(msiPath);
+    return [
+      r"$ErrorActionPreference = 'Stop';",
+      r"$securityModule = Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1';",
+      r"Import-Module -Name $securityModule -Force -ErrorAction Stop;",
+      "\$sig = Get-AuthenticodeSignature -LiteralPath '$pathLiteral';",
+      r"if ($null -eq $sig) { Write-Output 'UnknownError|||Get-AuthenticodeSignature returned null'; exit 1 }",
+      r"$thumb = if ($sig.SignerCertificate) { $sig.SignerCertificate.Thumbprint } else { '' };",
+      r"$publisher = if ($sig.SignerCertificate) { $sig.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false) } else { '' };",
+      r"$status = if ($null -ne $sig.Status) { $sig.Status.ToString() } else { 'UnknownError' };",
+      r"$message = if ($null -ne $sig.StatusMessage) { $sig.StatusMessage } else { '' };",
+      r"Write-Output ($status + '|' + $thumb + '|publisher:' + $publisher + '|' + $message)",
+    ].join(' ');
+  }
+
   Future<SelfUpdateResult> _validateWindowsInstallerSignature(File file) async {
     final expected = normalizeCertificateThumbprint(
       _expectedWindowsSignerThumbprintOverride ??
@@ -889,21 +917,13 @@ class SelfUpdateService {
       );
     }
 
-    final authenticodeCommand = [
-      r"$securityModule = Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1';",
-      r"Import-Module -Name $securityModule -Force -ErrorAction Stop;",
-      r"$sig = Get-AuthenticodeSignature -LiteralPath $args[0];",
-      r"$thumb = if ($sig.SignerCertificate) { $sig.SignerCertificate.Thumbprint } else { '' };",
-      r"$publisher = if ($sig.SignerCertificate) { $sig.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false) } else { '' };",
-      r"Write-Output ($sig.Status.ToString() + '|' + $thumb + '|publisher:' + $publisher + '|' + $sig.StatusMessage)",
-    ].join(' ');
+    final authenticodeCommand = buildWindowsAuthenticodeCommand(file.path);
     final result = await _processRun(WindowsSystemPaths.powershell(), [
       '-NoProfile',
       '-ExecutionPolicy',
       'Bypass',
       '-Command',
       authenticodeCommand,
-      file.path,
     ]);
     if (result.exitCode != 0) {
       return SelfUpdateResult(
