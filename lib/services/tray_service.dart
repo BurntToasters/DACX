@@ -54,11 +54,7 @@ class TrayService with TrayListener {
     try {
       final iconPath = trayIconAssetPath();
       if (Platform.isMacOS) {
-        await trayManager.setIcon(
-          iconPath,
-          isTemplate: true,
-          iconSize: 22,
-        );
+        await trayManager.setIcon(iconPath, isTemplate: true, iconSize: 22);
       } else {
         await trayManager.setIcon(iconPath);
       }
