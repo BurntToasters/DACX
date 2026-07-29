@@ -7,6 +7,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs
 import { delimiter, join } from 'node:path';
 import { homedir } from 'node:os';
 import crossSpawn from 'cross-spawn';
+import { isDirectExecution } from './direct-execution.js';
 
 // Pub installs global executables here; fvm lands here after activation.
 // We prepend this to PATH for child processes so `fvm` resolves even on
@@ -67,6 +68,20 @@ function dartKernelMismatch(text) {
   return /Invalid kernel binary format version/i.test(text);
 }
 
+export function buildFvmUseArgs(version) {
+  return ['use', version, '--force', '--skip-pub-get'];
+}
+
+export function parseFlutterFrameworkVersion(machineOutput) {
+  try {
+    const parsed = JSON.parse(machineOutput);
+    const version = parsed.frameworkVersion ?? parsed.flutterVersion;
+    return typeof version === 'string' && version.trim() ? version.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 function has(cmd) {
   const result = crossSpawn.sync(
     process.platform === 'win32' ? 'where' : 'which',
@@ -103,14 +118,27 @@ function syncVscodeFlutterSdkPath() {
 
 function ensurePinnedSdkHealthy(version) {
   const probe = () => {
-    const flutter = capture('fvm', ['flutter', '--version'], { allowFailure: true });
+    const flutter = capture('fvm', ['flutter', '--version', '--machine'], {
+      allowFailure: true,
+    });
     const dart = capture('fvm', ['dart', '--version'], { allowFailure: true });
+    const resolvedVersion = parseFlutterFrameworkVersion(flutter.stdout);
     const broken =
       flutter.status !== 0 ||
       dart.status !== 0 ||
       dartKernelMismatch(flutter.combined) ||
-      dartKernelMismatch(dart.combined);
-    return { broken, detail: flutter.combined || dart.combined };
+      dartKernelMismatch(dart.combined) ||
+      resolvedVersion !== version;
+    const mismatch =
+      resolvedVersion && resolvedVersion !== version
+        ? `Expected Flutter ${version}, but FVM resolved ${resolvedVersion}.`
+        : '';
+    return {
+      broken,
+      detail: [mismatch, flutter.combined || dart.combined]
+        .filter(Boolean)
+        .join('\n'),
+    };
   };
 
   let { broken, detail } = probe();
@@ -126,7 +154,7 @@ function ensurePinnedSdkHealthy(version) {
 
   run('fvm', ['remove', version]);
   run('fvm', ['install', version]);
-  run('fvm', ['use', version, '--force']);
+  run('fvm', buildFvmUseArgs(version));
   syncVscodeFlutterSdkPath();
 
   ({ broken, detail } = probe());
@@ -269,7 +297,7 @@ function main() {
   run('fvm', ['install', pinned]);
 
   console.log(`▶ Pinning project to Flutter ${pinned}`);
-  run('fvm', ['use', pinned, '--force']);
+  run('fvm', buildFvmUseArgs(pinned));
   syncVscodeFlutterSdkPath();
 
   ensurePinnedSdkHealthy(pinned);
@@ -282,4 +310,6 @@ function main() {
   console.log(`✓ fvm flutter pinned to ${pinned} and ready`);
 }
 
-main();
+if (isDirectExecution(import.meta.url)) {
+  main();
+}

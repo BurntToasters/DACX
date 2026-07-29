@@ -53,6 +53,8 @@ Tick items as you go before a stable cut. Fix failures as they surface rather th
 - [ ] Seek thumbnails toggle lives under Playback settings (not the more menu)
 - [ ] Check for Updates opens a sensible path (self-update on Win MSI / macOS Applications; Linux package guidance)
 - [ ] Windows MSI self-update burn-in: `dacx-update-helper.exe` next to `dacx.exe`; after Apply, no `.ps1` under `%LOCALAPPDATA%\Dacx\updates`; `helper.log` shows wait → sha256 → msiexec → `relaunched …\dacx.exe`; app returns like macOS update & restart
+- [ ] Windows recovery boundary: `v0.11.0` / `v0.11.1-beta.1` requires one manual `v0.11.1` MSI install; test a later in-app update from `v0.11.1`
+- [ ] Force a self-update failure: dialog retains the diagnostic error and **Download the update manually** opens the Rosie update page for stable builds or the exact GitHub prerelease page for beta builds
 - [ ] Flatpak (if tested): empty-state copy mentions picker; update guidance mentions reinstalling the `.flatpak` (not Flathub / `flatpak update`)
 
 ## Trust smoke
@@ -61,4 +63,4 @@ Tick items as you go before a stable cut. Fix failures as they surface rather th
 - [ ] Screenshot save works when media is playing
 - [ ] Media Info shows title / artist / album when tags are present
 - [ ] macOS: updated app remains Developer ID signed / Gatekeeper-happy after self-update
-- [ ] Windows: MSI update trusts Ed25519 manifest (Authenticode not required)
+- [ ] Windows release build: MSI passes Ed25519 manifest, SHA-256, and configured Artifact Signing publisher checks
