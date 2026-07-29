@@ -76,61 +76,6 @@ function has(cmd) {
   return result.status === 0;
 }
 
-const fvmrcPath = join(process.cwd(), '.fvmrc');
-if (!existsSync(fvmrcPath)) {
-  console.error('✖ .fvmrc not found. Run `fvm use <version>` first to pin Flutter.');
-  process.exit(1);
-}
-
-let pinned = '';
-try {
-  pinned = JSON.parse(readFileSync(fvmrcPath, 'utf8')).flutter;
-} catch (e) {
-  console.error(`✖ Could not parse .fvmrc: ${e.message ?? e}`);
-  process.exit(1);
-}
-if (!pinned) {
-  console.error('✖ .fvmrc has no `flutter` field.');
-  process.exit(1);
-}
-if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(pinned)) {
-  console.error(`✖ .fvmrc flutter version is not a valid pinned version: "${pinned}"`);
-  process.exit(1);
-}
-
-console.log(`Pinned Flutter version: ${pinned}`);
-
-if (!has('fvm')) {
-  console.log('▶ fvm not found; installing via `dart pub global activate fvm`');
-  run('dart', ['pub', 'global', 'activate', 'fvm']);
-} else {
-  const fvmProbe = capture('fvm', ['--version'], { allowFailure: true });
-  if (fvmProbe.status !== 0 || dartKernelMismatch(fvmProbe.combined)) {
-    console.log(
-      '▶ Repairing global fvm (Dart SDK / kernel mismatch on the fvm CLI)',
-    );
-    run('dart', ['pub', 'global', 'activate', 'fvm']);
-  }
-}
-
-console.log(`▶ Ensuring Flutter ${pinned} is installed via fvm`);
-run('fvm', ['install', pinned]);
-
-console.log(`▶ Pinning project to Flutter ${pinned}`);
-run('fvm', ['use', pinned, '--force']);
-syncVscodeFlutterSdkPath();
-
-ensurePinnedSdkHealthy(pinned);
-
-console.log('▶ Resolving Dart/Flutter package graph and regenerating l10n');
-run('fvm', ['flutter', 'pub', 'get']);
-run('fvm', ['flutter', 'gen-l10n']);
-
-// Persist `fvm` on the user's shell PATH so subsequent npm scripts that call
-// `fvm flutter` directly resolve it. Idempotent; checked before writing.
-ensurePubBinOnPath();
-console.log(`✓ fvm flutter pinned to ${pinned} and ready`);
-
 /** Stable VS Code path; FVM retargets `.fvm/flutter_sdk` on each `fvm use`. */
 const VSCODE_FLUTTER_SDK = '.fvm/flutter_sdk';
 
@@ -182,6 +127,7 @@ function ensurePinnedSdkHealthy(version) {
   run('fvm', ['remove', version]);
   run('fvm', ['install', version]);
   run('fvm', ['use', version, '--force']);
+  syncVscodeFlutterSdkPath();
 
   ({ broken, detail } = probe());
   if (broken) {
@@ -200,7 +146,13 @@ function ensurePinnedSdkHealthy(version) {
 function ensurePubBinOnPath() {
   const bin = pubBinDir();
   const userPath = process.env.PATH || '';
-  if (userPath.split(delimiter).some((p) => p.toLowerCase() === bin.toLowerCase())) {
+  const alreadyOnPath =
+    process.platform === 'win32'
+      ? userPath
+          .split(delimiter)
+          .some((p) => p.toLowerCase() === bin.toLowerCase())
+      : userPath.split(delimiter).includes(bin);
+  if (alreadyOnPath) {
     return;
   }
   if (process.env.CI) {
@@ -243,8 +195,6 @@ function addToShellRc(bin) {
   // Append to whichever rc files exist for the user's likely shells. macOS
   // defaults to zsh and sources .zprofile for login shells (SSH) + .zshrc for
   // interactive; most Linux distros default to bash; I also added fish because I use it.
-  // Write to all that exist so the user is covered regardless of which shell
-  // they launch.
   const home = homedir();
   const targets = [
     join(home, '.zprofile'),
@@ -256,7 +206,6 @@ function addToShellRc(bin) {
   ].filter((p) => existsSync(p));
 
   if (targets.length === 0) {
-    // No rc file exists yet; create .profile as a safe default.
     targets.push(join(home, '.profile'));
   }
 
@@ -277,3 +226,60 @@ function addToShellRc(bin) {
     console.log('  Open a new shell (or source the file) to pick up `fvm`.');
   }
 }
+
+function main() {
+  const fvmrcPath = join(process.cwd(), '.fvmrc');
+  if (!existsSync(fvmrcPath)) {
+    console.error('✖ .fvmrc not found. Run `fvm use <version>` first to pin Flutter.');
+    process.exit(1);
+  }
+
+  let pinned = '';
+  try {
+    pinned = JSON.parse(readFileSync(fvmrcPath, 'utf8')).flutter;
+  } catch (e) {
+    console.error(`✖ Could not parse .fvmrc: ${e.message ?? e}`);
+    process.exit(1);
+  }
+  if (!pinned) {
+    console.error('✖ .fvmrc has no `flutter` field.');
+    process.exit(1);
+  }
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(pinned)) {
+    console.error(`✖ .fvmrc flutter version is not a valid pinned version: "${pinned}"`);
+    process.exit(1);
+  }
+
+  console.log(`Pinned Flutter version: ${pinned}`);
+
+  if (!has('fvm')) {
+    console.log('▶ fvm not found; installing via `dart pub global activate fvm`');
+    run('dart', ['pub', 'global', 'activate', 'fvm']);
+  } else {
+    const fvmProbe = capture('fvm', ['--version'], { allowFailure: true });
+    if (fvmProbe.status !== 0 || dartKernelMismatch(fvmProbe.combined)) {
+      console.log(
+        '▶ Repairing global fvm (Dart SDK / kernel mismatch on the fvm CLI)',
+      );
+      run('dart', ['pub', 'global', 'activate', 'fvm']);
+    }
+  }
+
+  console.log(`▶ Ensuring Flutter ${pinned} is installed via fvm`);
+  run('fvm', ['install', pinned]);
+
+  console.log(`▶ Pinning project to Flutter ${pinned}`);
+  run('fvm', ['use', pinned, '--force']);
+  syncVscodeFlutterSdkPath();
+
+  ensurePinnedSdkHealthy(pinned);
+
+  console.log('▶ Resolving Dart/Flutter package graph and regenerating l10n');
+  run('fvm', ['flutter', 'pub', 'get']);
+  run('fvm', ['flutter', 'gen-l10n']);
+
+  ensurePubBinOnPath();
+  console.log(`✓ fvm flutter pinned to ${pinned} and ready`);
+}
+
+main();
