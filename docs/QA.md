@@ -34,7 +34,7 @@ Tick items as you go before a stable cut. Fix failures as they surface rather th
 - [ ] Windows: Jump List recents + taskbar progress while playing
 - [ ] macOS: File menu + Dock menu New Window / Open; Open Recent → Clear Menu
 - [ ] Linux AppImage: Check for Updates mentions AppManager and/or replacing the AppImage; deb/rpm shows package guidance (not “portable”)
-- [ ] Minimize to tray (Appearance, off by default): close hides; tray Show restores; tray Quit exits
+- [ ] Minimize to tray (Appearance, off by default): close hides; tray icon is visible on Windows and macOS; tray Show restores; tray Quit exits
 
 ## Settings / updates
 

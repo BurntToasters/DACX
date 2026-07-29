@@ -52,6 +52,15 @@ function header(msg) {
   console.log(`\n${'─'.repeat(60)}\n  ${msg}\n${'─'.repeat(60)}`);
 }
 
+function hasBootstrapDart() {
+  return hasCmd('dart');
+}
+
+function ensureDartOrFlutterForFvm() {
+  if (hasBootstrapDart()) return true;
+  return resolveFlutterOnWindowsPath();
+}
+
 function resolveFlutterOnWindowsPath() {
   if (platform() !== 'win32') return hasCmd('flutter');
   if (hasCmd('flutter')) return true;
@@ -76,7 +85,7 @@ function resolveFlutterOnWindowsPath() {
 
 function printWindowsFlutterInstallHelp() {
   console.error(
-    '\n✖ Flutter is not available on PATH.\n' +
+    '\n✖ Dart or Flutter is not available on PATH (needed to bootstrap FVM).\n' +
     '  Install Flutter manually on Windows, restart terminal, then re-run setup.\n' +
     '  Docs: https://docs.flutter.dev/install/manual\n\n' +
     '  Quick PowerShell option:\n' +
@@ -113,12 +122,12 @@ function printMacXcodeInstallHelp() {
 function setupWindows() {
   header('Dacx: Windows setup');
 
-  // Flutter
-  if (!resolveFlutterOnWindowsPath()) {
+  // Dart (for FVM) or a Flutter SDK on PATH — setup:flutter pins .fvmrc afterward.
+  if (!ensureDartOrFlutterForFvm()) {
     printWindowsFlutterInstallHelp();
     process.exit(1);
   }
-  console.log('✔ Flutter found');
+  console.log('✔ Dart or Flutter found (FVM bootstrap)');
 
   // Visual Studio Build Tools check
   console.log('\n⚠  Windows desktop builds require Visual Studio Build Tools with the');
@@ -175,13 +184,13 @@ function setupMac() {
     console.log('✔ Homebrew found');
   }
 
-  // Flutter
-  if (!hasCmd('flutter')) {
+  // Flutter (or Dart alone) — FVM pins the project SDK in commonSetup.
+  if (!hasCmd('flutter') && !hasBootstrapDart()) {
     console.log('\nInstalling Flutter via Homebrew...');
     run('brew install --cask flutter');
     console.log('\n⚠  You may need to restart your terminal / re-open SSH session so flutter is on PATH.');
   } else {
-    console.log('✔ Flutter found');
+    console.log('✔ Dart or Flutter found (FVM bootstrap)');
   }
 
   // CocoaPods
@@ -219,8 +228,8 @@ function setupLinux() {
   run(`sudo apt-get update`);
   run(`sudo apt-get install -y ${packages.join(' ')}`);
 
-  // Flutter via snap
-  if (!hasCmd('flutter')) {
+  // Flutter via snap (or existing Dart) — FVM pins the project SDK in commonSetup.
+  if (!hasCmd('flutter') && !hasBootstrapDart()) {
     console.log('\nInstalling Flutter via snap...');
     if (hasCmd('snap')) {
       run('sudo snap install flutter --classic');
@@ -302,20 +311,16 @@ function setupLinux() {
 function commonSetup() {
   header('Common setup');
 
-  // Flutter desktop support
+  console.log('\nInstalling npm packages...');
+  run('npm install');
+
+  console.log('\nPinning Flutter via FVM (.fvmrc)...');
+  run('npm run setup:flutter');
+
   const desktopDevice = target === 'win' ? 'windows' : target === 'mac' ? 'macos' : 'linux';
   run(`fvm flutter config --enable-${desktopDevice}-desktop`, { allowFail: true });
 
-  // doctor
   run('fvm flutter doctor -v', { allowFail: true });
-
-  // Dart/Flutter
-  console.log('\nInstalling Dart/Flutter packages...');
-  run('fvm flutter pub get');
-
-  // npm
-  console.log('\nInstalling npm packages...');
-  run('npm install');
 }
 
 switch (target) {

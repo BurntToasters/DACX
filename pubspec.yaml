@@ -1,7 +1,7 @@
 name: dacx
 description: "Quick, lightweight cross-platform media player."
 publish_to: 'none'
-version: 0.11.0+1100
+version: 0.11.1-beta.1+1101
 
 environment:
   sdk: ^3.10.7
@@ -49,4 +49,5 @@ flutter:
   assets:
     - assets/cacert.pem
     - assets/icon/icon.png
-    - windows/runner/resources/app_icon.ico
+    - assets/icon/icon.ico
+    - assets/icon/tray_icon_template.png

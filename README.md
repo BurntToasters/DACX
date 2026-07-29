@@ -83,8 +83,8 @@ Dacx is a desktop music and video player focused on speed and low overhead, with
 # Install Node.js dependencies (build scripts)
 npm install
 
-# Install Flutter dependencies through FVM
-fvm flutter pub get
+# Install / repair FVM and Flutter (.fvmrc), then fetch packages and l10n
+npm run setup:flutter
 
 # Run in development mode
 npm run dev

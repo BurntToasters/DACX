@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// VM branch sync (npm run vi / b / r): reset to upstream, npm ci, then FVM pin + pub get + gen-l10n.
 import { execSync } from 'child_process';
 import crossSpawn from 'cross-spawn';
 
@@ -17,6 +18,7 @@ try {
   run('git', ['clean', '-fd']);
   run('git', ['pull']);
   run('npm', ['ci']);
+  run('npm', ['run', 'setup:flutter']);
 
   const branch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
   const green = '\x1b[32m';

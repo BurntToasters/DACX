@@ -5,12 +5,13 @@ Thanks for helping improve Dacx.
 ## Development setup
 
 1. Install Node.js 22+, Dart (for FVM), and platform build deps per [README.md](README.md).
-2. `npm ci && npm run setup:flutter`
-3. `fvm flutter pub get`
-4. Run locally: `npm run dev` (or `dev:win` / `dev:mac` / `dev:linux`)
+2. `npm ci && npm run setup:flutter` — installs or repairs the global `fvm` CLI, pins the Flutter SDK from `.fvmrc`, runs `flutter pub get`, and regenerates l10n (`gen-l10n`). Re-run this if you see `Invalid kernel binary format version` from FVM.
+3. Run locally: `npm run dev` (or `dev:win` / `dev:mac` / `dev:linux`)
 
 Run every project Flutter or Dart command through FVM: `fvm flutter ...` or
 `fvm dart ...`. Never call the system `flutter` or `dart` directly.
+
+VS Code / Cursor uses `"dart.flutterSdkPath": ".fvm/flutter_sdk"` (see `.vscode/settings.json`). That symlink is recreated when you bump `.fvmrc` and run `npm run setup:flutter` or `fvm use`; you do not edit the version number in settings by hand.
 
 ## Quality gates (run before opening a PR)
 

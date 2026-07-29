@@ -3,7 +3,7 @@
 // quickly when already in sync.
 
 import { execSync } from 'node:child_process';
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { homedir } from 'node:os';
 import crossSpawn from 'cross-spawn';
@@ -38,7 +38,7 @@ function run(cmd, args, opts = {}) {
   return result;
 }
 
-function capture(cmd, args) {
+function capture(cmd, args, { allowFailure = false } = {}) {
   const result = crossSpawn.sync(cmd, args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -46,10 +46,25 @@ function capture(cmd, args) {
     windowsHide: true,
   });
   if (result.error) throw result.error;
-  if ((result.status ?? 1) !== 0) {
-    throw new Error(result.stderr || `${cmd} ${args.join(' ')} exited with ${result.status}`);
+  const stdout = (result.stdout || '').trim();
+  const stderr = (result.stderr || '').trim();
+  const combined = `${stdout}\n${stderr}`.trim();
+  if ((result.status ?? 1) !== 0 && !allowFailure) {
+    throw new Error(combined || `${cmd} ${args.join(' ')} exited with ${result.status}`);
   }
-  return (result.stdout || '').trim();
+  return { status: result.status ?? 1, stdout, stderr, combined };
+}
+
+function captureText(cmd, args, opts) {
+  const { combined, status } = capture(cmd, args, opts);
+  if (status !== 0 && !opts?.allowFailure) {
+    throw new Error(combined || `${cmd} ${args.join(' ')} exited with ${status}`);
+  }
+  return combined;
+}
+
+function dartKernelMismatch(text) {
+  return /Invalid kernel binary format version/i.test(text);
 }
 
 function has(cmd) {
@@ -88,28 +103,99 @@ console.log(`Pinned Flutter version: ${pinned}`);
 if (!has('fvm')) {
   console.log('▶ fvm not found; installing via `dart pub global activate fvm`');
   run('dart', ['pub', 'global', 'activate', 'fvm']);
-}
-
-let installed = '';
-try {
-  installed = capture('fvm', ['api', 'list']);
-} catch {
-  installed = '';
-}
-if (installed.includes(`"${pinned}"`)) {
-  console.log(`✓ Flutter ${pinned} already installed via fvm`);
 } else {
-  console.log(`▶ Installing Flutter ${pinned} via fvm`);
-  run('fvm', ['install', pinned]);
+  const fvmProbe = capture('fvm', ['--version'], { allowFailure: true });
+  if (fvmProbe.status !== 0 || dartKernelMismatch(fvmProbe.combined)) {
+    console.log(
+      '▶ Repairing global fvm (Dart SDK / kernel mismatch on the fvm CLI)',
+    );
+    run('dart', ['pub', 'global', 'activate', 'fvm']);
+  }
 }
 
-// Verify by running `fvm flutter --version` so any download/setup completes.
-run('fvm', ['flutter', '--version']);
+console.log(`▶ Ensuring Flutter ${pinned} is installed via fvm`);
+run('fvm', ['install', pinned]);
+
+console.log(`▶ Pinning project to Flutter ${pinned}`);
+run('fvm', ['use', pinned, '--force']);
+syncVscodeFlutterSdkPath();
+
+ensurePinnedSdkHealthy(pinned);
+
+console.log('▶ Resolving Dart/Flutter package graph and regenerating l10n');
+run('fvm', ['flutter', 'pub', 'get']);
+run('fvm', ['flutter', 'gen-l10n']);
 
 // Persist `fvm` on the user's shell PATH so subsequent npm scripts that call
 // `fvm flutter` directly resolve it. Idempotent; checked before writing.
 ensurePubBinOnPath();
 console.log(`✓ fvm flutter pinned to ${pinned} and ready`);
+
+/** Stable VS Code path; FVM retargets `.fvm/flutter_sdk` on each `fvm use`. */
+const VSCODE_FLUTTER_SDK = '.fvm/flutter_sdk';
+
+function syncVscodeFlutterSdkPath() {
+  const dir = join(process.cwd(), '.vscode');
+  const file = join(dir, 'settings.json');
+  if (!existsSync(dir)) return;
+
+  let settings = {};
+  if (existsSync(file)) {
+    try {
+      settings = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      console.warn('⚠  Could not parse .vscode/settings.json; skipping SDK path sync');
+      return;
+    }
+  }
+
+  if (settings['dart.flutterSdkPath'] === VSCODE_FLUTTER_SDK) return;
+
+  settings['dart.flutterSdkPath'] = VSCODE_FLUTTER_SDK;
+  writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+  console.log(`✓ VS Code Flutter SDK path → ${VSCODE_FLUTTER_SDK}`);
+}
+
+function ensurePinnedSdkHealthy(version) {
+  const probe = () => {
+    const flutter = capture('fvm', ['flutter', '--version'], { allowFailure: true });
+    const dart = capture('fvm', ['dart', '--version'], { allowFailure: true });
+    const broken =
+      flutter.status !== 0 ||
+      dart.status !== 0 ||
+      dartKernelMismatch(flutter.combined) ||
+      dartKernelMismatch(dart.combined);
+    return { broken, detail: flutter.combined || dart.combined };
+  };
+
+  let { broken, detail } = probe();
+  if (!broken) {
+    console.log('✓ Pinned Flutter/Dart SDK responds cleanly');
+    return;
+  }
+
+  console.log('▶ Pinned SDK health check failed; reinstalling cached Flutter');
+  if (detail) {
+    console.log(`   ${detail.split('\n').slice(0, 3).join('\n   ')}`);
+  }
+
+  run('fvm', ['remove', version]);
+  run('fvm', ['install', version]);
+  run('fvm', ['use', version, '--force']);
+
+  ({ broken, detail } = probe());
+  if (broken) {
+    console.error('');
+    console.error('✖ FVM Flutter SDK still unhealthy after reinstall.');
+    console.error(
+      '  Try: dart pub global activate fvm && npm run setup:flutter',
+    );
+    console.error('  Or install Flutter manually and run `fvm use` in this repo.');
+    if (detail) console.error(`  Last output: ${detail}`);
+    process.exit(1);
+  }
+  console.log('✓ Reinstalled pinned Flutter/Dart SDK');
+}
 
 function ensurePubBinOnPath() {
   const bin = pubBinDir();

@@ -87,6 +87,11 @@
     <mediatype>application/pls+xml</mediatype>
   </provides>
   <releases>
+    <release version="0.11.1-beta.1" date="2026-07-29">
+      <description>
+        <p>Fix Windows system tray icon (multi-size ICO). macOS menu bar tray template icon. Unified Windows icon.ico from icon.png. FVM setup repairs SDK and regenerates l10n.</p>
+      </description>
+    </release>
     <release version="0.11.0" date="2026-07-15"/>
     <release version="0.11.0-beta.6" date="2026-07-12"/>
     <release version="0.11.0-beta.5" date="2026-07-12"/>
