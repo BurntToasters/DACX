@@ -87,6 +87,11 @@
     <mediatype>application/pls+xml</mediatype>
   </provides>
   <releases>
+    <release version="0.11.1-beta.2" date="2026-07-29">
+      <description>
+        <p>Fix Windows self-update Authenticode verification (MSI path was not passed into PowerShell correctly).</p>
+      </description>
+    </release>
     <release version="0.11.1-beta.1" date="2026-07-29">
       <description>
         <p>Fix Windows system tray icon (multi-size ICO). macOS menu bar tray template icon. Unified Windows icon.ico from icon.png. FVM setup repairs SDK and regenerates l10n.</p>
