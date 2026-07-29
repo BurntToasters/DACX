@@ -25,6 +25,7 @@
 - **Codebase:** `npm run icons:normalize` builds `assets/icon/icon.ico` and copies the same bytes to `windows/runner/resources/app_icon.ico` for the executable and MSI.
 - **Codebase:** `npm run setup:flutter` repairs a broken global `fvm` CLI, reinstalls the pinned SDK when kernel checks fail, and runs `flutter pub get` plus `gen-l10n`. VM sync (`npm run vi`, `b`, `r`) and `setup.js` call it after `npm ci` / `npm install`.
 - **PKG:** `npm run u2` runs `fvm flutter gen-l10n` after dependency updates so committed l10n outputs stay in sync.
+- **PKG:** Refreshed bundled Mozilla CA roots (`assets/cacert.pem`) from curl.se; update manually with `npm run cacert:update` (validated download, not run on `release:*`).
 - **PKG:** Updated packages.
 
 ## Changes in `v0.11.0:`

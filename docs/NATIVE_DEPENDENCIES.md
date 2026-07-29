@@ -10,6 +10,9 @@ typically bundle or depend on:
 | **FFmpeg** (via libmpv) | Demux/decode | LGPL/GPL (build-dependent) |
 | **Flutter engine** | UI runtime | BSD-style (see Flutter SDK) |
 | **libayatana-appindicator** (Linux tray) | System tray via `tray_manager` | LGPL |
+| **Mozilla CA bundle** (`assets/cacert.pem`) | Extra TLS roots on Windows (with OS store) via `trusted_http.dart` | MPL-2.0 (Mozilla roots; see PEM header) |
+
+Refresh the CA bundle from [curl.se’s CA extract](https://curl.se/docs/caextract.html) **manually** when you intend to (`npm run cacert:update`). The script validates the download before overwriting; it is **not** run automatically by `release:*`. Optional: `npm run check:cacert` (strict) or the advisory step in `test:all`.
 
 ## Linux packaging notes
 
