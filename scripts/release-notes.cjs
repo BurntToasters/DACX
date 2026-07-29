@@ -6,19 +6,28 @@ function readReleaseNotes(root = path.resolve(__dirname, '..')) {
 }
 
 function validateReleaseNotes(notes, version) {
+  const visibleNotes = notes.replace(/<!--[\s\S]*?-->/g, '').trim();
   const failures = [];
   const expectedHeading = '## Changes in `v' + version + ':`';
-  const firstHeadingIndex = notes.indexOf('## Changes in `v');
+  const firstHeadingIndex = visibleNotes.indexOf('## Changes in `v');
   const firstHeadingEnd =
-    firstHeadingIndex < 0 ? notes.length : notes.indexOf('\n## Changes in `v', firstHeadingIndex + 1);
+    firstHeadingIndex < 0
+      ? visibleNotes.length
+      : visibleNotes.indexOf('\n## Changes in `v', firstHeadingIndex + 1);
   const currentRelease =
     firstHeadingIndex < 0
       ? ''
-      : notes.slice(firstHeadingIndex, firstHeadingEnd < 0 ? notes.length : firstHeadingEnd);
-  const preamble = notes.slice(0, firstHeadingIndex < 0 ? notes.length : firstHeadingIndex);
+      : visibleNotes.slice(
+          firstHeadingIndex,
+          firstHeadingEnd < 0 ? visibleNotes.length : firstHeadingEnd,
+        );
+  const preamble = visibleNotes.slice(
+    0,
+    firstHeadingIndex < 0 ? visibleNotes.length : firstHeadingIndex,
+  );
   const isPrerelease = version.includes('beta') || version.includes('alpha');
 
-  if (!notes.startsWith('> [!')) {
+  if (!visibleNotes.startsWith('> [!')) {
     failures.push('CHANGELOG.md must begin with a release notice');
   }
   if (!currentRelease.startsWith(expectedHeading)) {
