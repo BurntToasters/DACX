@@ -14,7 +14,7 @@ Security fixes are applied to the latest release on the [stable](https://github.
 
 Please **do not** open public GitHub issues for undisclosed security problems.
 
-Report privately to the maintainer via the contact path listed on [rosie.run/support](https://rosie.run/support) or the repository owner profile. Include:
+Report privately to the maintainer via the contact path listed on [help.rosie.run/contact](https://help.rosie.run/contact) or the repository owner profile. Include:
 
 - Affected version and platform (Windows / macOS / Linux)
 - Steps to reproduce
