@@ -35,6 +35,7 @@
     "launch:linux": "fvm flutter run -d linux --release",
     "launch:mac": "fvm flutter run -d macos --release",
     "setup:flutter": "node scripts/setup-flutter.js",
+    "seo:social-preview": "python scripts/create-social-preview.py && node -e \"require('fs').copyFileSync('assets/branding/social-preview.png','.github/social-preview.png')\"",
     "setup:win": "node scripts/setup.js win",
     "setup:win:artifact-signing": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/setup-windows-artifact-signing.ps1",
     "setup:mac": "node scripts/setup.js mac",

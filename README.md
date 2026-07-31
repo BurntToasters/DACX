@@ -1,15 +1,15 @@
 # Dacx: Cross-Platform Music and Video Player
 
-Fast, lightweight, open source media player for Windows, macOS, and Linux.
+Fast, lightweight, open source desktop media player for Windows, macOS, and Linux.
 
-Built with Flutter + [media_kit](https://github.com/media-kit/media-kit) (libmpv).
+Built with Flutter + [media_kit](https://github.com/media-kit/media-kit) (libmpv). **Website:** [rosie.run/dacx](https://rosie.run/dacx)
 
 [![Latest Release](https://img.shields.io/github/v/release/BurntToasters/Dacx?display_name=tag&label=release)](https://github.com/BurntToasters/Dacx/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/BurntToasters/Dacx/total?label=downloads)](https://github.com/BurntToasters/Dacx/releases)
 [![Tests](https://img.shields.io/github/actions/workflow/status/BurntToasters/Dacx/test.yml?branch=main&label=tests)](https://github.com/BurntToasters/Dacx/actions/workflows/test.yml)
 [![License: GPLv3](https://img.shields.io/github/license/BurntToasters/Dacx)](LICENSE)
 
-Dacx is a desktop music and video player focused on speed and low overhead, with modern playback controls, media session integration, and broad format support.
+Dacx is a lightweight desktop music and video player focused on speed and low overhead — a modern libmpv-based alternative for local playback on Windows, macOS, and Linux, with playlists, a 10-band equalizer, media-session controls, and broad format support.
 
 <div align="center">
   <table>
@@ -20,7 +20,7 @@ Dacx is a desktop music and video player focused on speed and low overhead, with
       </td>
       <td valign="middle" align="center">
         <p align="center">
-  <img width="85%" height="1012" alt="Dacx screenshot" src="assets/screenshots/dacx_sc.png" />
+  <img width="85%" height="1012" alt="Dacx desktop music and video player on macOS" src="assets/screenshots/dacx_sc.png" />
 &nbsp;
 </p>
       </td>

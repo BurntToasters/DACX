@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest an idea for Dacx.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature ideas are welcome. Search [existing issues](https://github.com/BurntToasters/Dacx/issues) and [Discussions](https://github.com/BurntToasters/Dacx/discussions) first.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem does this solve, or what workflow would it improve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Primary platform
+      options:
+        - All platforms
+        - Windows
+        - macOS
+        - Linux

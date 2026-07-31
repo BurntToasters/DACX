@@ -1,0 +1,55 @@
+name: Bug report
+description: Report something that is broken or not working as expected.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please search [existing issues](https://github.com/BurntToasters/Dacx/issues) first.
+        For install help, see [docs/INSTALL.md](https://github.com/BurntToasters/Dacx/blob/main/docs/INSTALL.md) or the [FAQ](https://help.rosie.run/dacx/en-us/faq).
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Dacx version
+      description: Settings → About, or the release tag you installed.
+      placeholder: e.g. v0.11.1
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Dacx
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Optional. Redact personal paths if needed.
