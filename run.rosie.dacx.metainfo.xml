@@ -87,6 +87,7 @@
     <mediatype>application/pls+xml</mediatype>
   </provides>
   <releases>
+    <release version="0.11.2" date="2026-08-12"/>
     <release version="0.11.1" date="2026-07-29">
       <description>
         <p>Fix Windows self-update signature verification and add an explicit manual-download recovery action when installation fails.</p>
