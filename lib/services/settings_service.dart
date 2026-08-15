@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/playable_source.dart';
 import '../models/update_channel.dart';
+import '../playback/bookmark_retention_policy.dart';
+import '../playback/playback_mix_policy.dart';
 import 'instance_mode_service.dart';
 
 enum AccentColor {
@@ -269,9 +271,13 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  double get speed => _prefs.getDouble(_kSpeed) ?? 1.0;
+  double get speed {
+    final raw = _prefs.getDouble(_kSpeed) ?? 1.0;
+    return raw.clamp(0.25, 4.0);
+  }
+
   set speed(double v) {
-    _prefs.setDouble(_kSpeed, v);
+    _prefs.setDouble(_kSpeed, v.clamp(0.25, 4.0));
     notifyListeners();
   }
 
@@ -502,11 +508,15 @@ class SettingsService extends ChangeNotifier {
     }
   }
 
+  String? coveringBookmarkKey(String path) {
+    final map = _readBookmarkMap();
+    return BookmarkRetentionPolicy.coveringKey(path, map.keys);
+  }
+
   void _pruneBookmarksToList(List<String> keep) {
     final map = _readBookmarkMap();
     if (map.isEmpty) return;
-    final keepSet = keep.toSet();
-    map.removeWhere((k, _) => !keepSet.contains(k));
+    map.removeWhere((k, _) => !BookmarkRetentionPolicy.shouldKeepKey(k, keep));
     _writeBookmarkMap(map);
   }
 
@@ -605,8 +615,10 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool get linuxCompositorBlurExperimental =>
-      _prefs.getBool(_kLinuxCompositorBlurExperimental) ?? false;
+  bool get linuxCompositorBlurExperimental {
+    if (!experimentalFeaturesEnabled) return false;
+    return _prefs.getBool(_kLinuxCompositorBlurExperimental) ?? false;
+  }
 
   set linuxCompositorBlurExperimental(bool value) {
     _prefs.setBool(_kLinuxCompositorBlurExperimental, value);
@@ -719,16 +731,19 @@ class SettingsService extends ChangeNotifier {
   }
 
   /// Mix all audio tracks into one output via mpv `lavfi-complex`.
-  /// Marked experimental; the stored preference is preserved but
-  /// reported as `false` whenever Experimental Features is disabled,
-  /// so all consumers automatically get the safe default without
-  /// needing to re-check the experimental flag themselves.
+  ///
+  /// Withdrawn from the UI (`PlaybackMixPolicy.userFacingEnabled`). The
+  /// stored preference is kept for a later return; consumers always see
+  /// `false` until that flag is flipped. Experimental Features also gates
+  /// the value when mix is user-facing again.
   bool get multiAudioMix {
+    if (!PlaybackMixPolicy.userFacingEnabled) return false;
     if (!experimentalFeaturesEnabled) return false;
     return _prefs.getBool(_kMultiAudioMix) ?? false;
   }
 
   set multiAudioMix(bool v) {
+    if (!PlaybackMixPolicy.userFacingEnabled) return;
     _prefs.setBool(_kMultiAudioMix, v);
     notifyListeners();
   }

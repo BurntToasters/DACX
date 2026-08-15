@@ -6,7 +6,7 @@ import FlutterMacOS
 import Foundation
 
 import desktop_drop
-import file_picker
+import file_picker_darwin
 import macos_window_utils
 import media_kit_libs_macos_video
 import media_kit_video

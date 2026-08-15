@@ -34,4 +34,15 @@ void main() {
     await Future.wait([first, second]);
     expect(log, [1]);
   });
+
+  test('dispose prevents later tasks from running', () async {
+    final queue = LoadQueue();
+    queue.dispose();
+    var ran = false;
+    await queue.enqueue(() async {
+      ran = true;
+    });
+    expect(ran, isFalse);
+    expect(queue.isBusy, isFalse);
+  });
 }

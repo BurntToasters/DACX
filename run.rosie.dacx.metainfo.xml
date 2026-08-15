@@ -13,6 +13,8 @@
       Dacx is a fast, lightweight media player for audio and video files.
       Built with Flutter and powered by libmpv, it supports a wide range of
       formats including MP3, FLAC, WAV, OGG, AAC, MP4, MKV, AVI, and WebM.
+      Linux AppImage, Flatpak, and tar builds bundle libmpv. deb and rpm
+      packages depend on the distro libmpv package.
     </p>
     <p>
       Features include drag-and-drop file opening, keyboard shortcuts,
@@ -87,7 +89,11 @@
     <mediatype>application/pls+xml</mediatype>
   </provides>
   <releases>
-    <release version="0.11.2" date="2026-08-12"/>
+    <release version="0.11.2-beta.1" date="2026-08-15">
+      <description>
+        <p>Bundle libmpv into AppImage, tar, and Flatpak; playback, singleton, and updater fixes.</p>
+      </description>
+    </release>
     <release version="0.11.1" date="2026-07-29">
       <description>
         <p>Fix Windows self-update signature verification and add an explicit manual-download recovery action when installation fails.</p>

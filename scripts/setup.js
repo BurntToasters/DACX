@@ -220,6 +220,7 @@ function setupLinux() {
     'libgtk-3-dev', 'libepoxy-dev', 'libmpv-dev', 'mpv',
     'libayatana-appindicator3-dev',
     'libunwind-dev',
+    'patchelf',
     'curl', 'git', 'unzip', 'xz-utils', 'zip',
     'flatpak', 'flatpak-builder',
   ];

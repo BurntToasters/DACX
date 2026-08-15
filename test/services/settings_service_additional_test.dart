@@ -117,6 +117,28 @@ void main() {
       expect(prefs.getString('file_bookmarks_v1'), isNull);
     });
 
+    test('pruneRecentFiles keeps covering directory bookmarks', () async {
+      final tmp = await Directory.systemTemp.createTemp('dacx_bm_');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final child = File('${tmp.path}/a.mp3')..writeAsBytesSync(const [1]);
+      SharedPreferences.setMockInitialValues({
+        'recent_files': jsonEncode([child.path, '/missing-sibling.mp3']),
+        'file_bookmarks_v1': jsonEncode({
+          tmp.path: 'dir-bookmark',
+          '/missing-sibling.mp3': 'gone',
+        }),
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final service = SettingsService(prefs);
+
+      final changed = service.pruneRecentFiles(notifyListeners: false);
+      expect(changed, isTrue);
+      expect(service.recentFiles, [child.path]);
+      expect(service.fileBookmark(tmp.path), 'dir-bookmark');
+      expect(service.fileBookmark('/missing-sibling.mp3'), isNull);
+      expect(service.coveringBookmarkKey(child.path), tmp.path);
+    });
+
     test('pruneRecentFiles removes key when every entry is missing', () async {
       SharedPreferences.setMockInitialValues({
         'recent_files': jsonEncode(['/missing-1.mp3', '/missing-2.mp3']),
@@ -264,17 +286,21 @@ void main() {
       expect(notifications, 1);
     });
 
-    test('multiAudioMix is gated by experimentalFeaturesEnabled', () async {
-      SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
-      final service = SettingsService(prefs);
+    test(
+      'multiAudioMix stays off while user-facing mix is withdrawn',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final service = SettingsService(prefs);
 
-      service.multiAudioMix = true;
-      expect(service.multiAudioMix, isFalse);
+        service.multiAudioMix = true;
+        expect(service.multiAudioMix, isFalse);
 
-      service.experimentalFeaturesEnabled = true;
-      expect(service.multiAudioMix, isTrue);
-    });
+        service.experimentalFeaturesEnabled = true;
+        service.multiAudioMix = true;
+        expect(service.multiAudioMix, isFalse);
+      },
+    );
 
     test(
       'keybinds decode filters non-string list entries and malformed payload',

@@ -26,8 +26,14 @@ abstract final class M3uPlaylist {
     return _parseM3u(content, baseDir: baseDir);
   }
 
+  static const maxBytes = 8 * 1024 * 1024;
+
   static Future<List<PlayableSource>> parseFile(String playlistPath) async {
     final file = File(playlistPath);
+    final length = await file.length();
+    if (length > maxBytes) {
+      throw const FileSystemException('Playlist file is too large');
+    }
     final content = await file.readAsString();
     return parse(content, baseDir: p.dirname(playlistPath));
   }

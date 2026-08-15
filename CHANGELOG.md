@@ -1,5 +1,6 @@
-<!-- > [!NOTE]
-> 🅱️ This is a Beta build. -->
+> [!NOTE]
+> 🅱️ This is a Beta build.
+
 > [!IMPORTANT]
 > **Windows users updating from `v0.11.0` or `v0.11.1-beta.1`: the in-app installer in those versions is broken.**
 > When the update fails, choose **Open release page**, download the `v0.11.1` x64 MSI, and run it manually once. In-app updates work again after `v0.11.1` is installed.
@@ -8,11 +9,11 @@
 
 | <img height="20" src="https://raw.githubusercontent.com/BurntToasters/bcls/main/media/windows.png" /> Windows | <img height="20" src="https://raw.githubusercontent.com/BurntToasters/bcls/main/media/mac.png" /> macOS | <img height="20" src="https://raw.githubusercontent.com/BurntToasters/bcls/main/media/linux.png" /> Linux |
 | :--- | :--- | :--- |
-| **MSI:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-Windows-x64.msi) <!-- / [arm64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-Windows-arm64.msi) --> | **[Universal DMG](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-macOS.dmg)** | **AppImage:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-Linux-x86_64.AppImage) <!-- / [arm64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-Linux-arm64.AppImage) --> |
-| | **[Universal ZIP](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-macOS.zip)** | **DEB:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-Linux-amd64.deb) <!-- / [arm64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-Linux-arm64.deb) --> |
-| | | **RPM:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-Linux-x86_64.rpm) <!-- / [arm64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-Linux-aarch64.rpm) --> |
-| | | **Flatpak:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-Linux-x86_64.flatpak) <!-- / [arm64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-Linux-aarch64.flatpak) --> |
-| | | **TAR (Generic Linux):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.1/Dacx-Linux-x86_64.tar.gz) |
+| **MSI:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.1/Dacx-Windows-x64.msi) | **[Universal DMG](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.1/Dacx-macOS.dmg)** | **AppImage:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.1/Dacx-Linux-x86_64.AppImage) |
+| | **[Universal ZIP](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.1/Dacx-macOS.zip)** | **DEB:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.1/Dacx-Linux-amd64.deb) |
+| | | **RPM:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.1/Dacx-Linux-x86_64.rpm) |
+| | | **Flatpak:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.1/Dacx-Linux-x86_64.flatpak) |
+| | | **TAR (Generic Linux):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.1/Dacx-Linux-x86_64.tar.gz) |
 
 > [!IMPORTANT]
 > The `.asc` files are my normal GPG signatures which you can verify using my GPG Public Key: https://tuxedo.rosie.run/GPG/BurntToasters_0xF2FBC20F_public.asc.
@@ -20,6 +21,24 @@
 > ⚠️ Arm64 Linux and Windows Binaries are NOT available at the moment. Its something I may get around to in the future but its not a priority.
 
 ### ℹ️ Enjoying Dacx? Consider [❤️ Supporting Me! ❤️](https://rosie.run/support)
+
+## Changes in `v0.11.2-beta.1:`
+- **Fix - Open With no longer wipes the queue:** Missing or unsafe files are validated before `setPlayingSource`, so a bad Open With path cannot replace a live queue.
+- **Fix - Load follow-ups honor generation:** Resume, mix, chapters, album-art track select, and audio filters abort when a newer open starts.
+- **Fix - Stop is one path:** UI Stop, media-session Stop, and the sleep timer persist resume, clear mix/filters, stop mpv, clear the OS media session, and reset the surface.
+- **Fix - Queue Next/completed race:** Playlist index advances inside the same load queue task; `completed` is ignored while a load is in flight.
+- **Fix - Windows singleton restore:** A second launch with no file now activates the existing window (`__DACX_ACTIVATE__`) instead of exiting or spawning a second instance. Open With / file payloads also restore a tray-hidden window. The secondary process calls `AllowSetForegroundWindow` so restore can take focus.
+- **Fix - Windows updater helper:** `dacx-update-helper.exe` is copied to `%LOCALAPPDATA%\\Dacx\\updates` before msiexec so the helper is not locked inside Program Files during the upgrade.
+- **Fix - Stop vs load races:** Stop bumps the load generation, runs on the same load queue as open, and ignores `completed` while stopping so mix/resume/EQ/queue-advance cannot land on a stopped surface.
+- **Fix - macOS covering bookmarks:** Folder/playlist bookmarks are kept when a child file becomes a recent, and opens resolve through the covering directory instead of pruning it.
+- **Fix - CLI / Open With URLs:** `http(s)` paths open as streams instead of missing local files. Unsafe playlist paths are refused before parse.
+- **UX:** Fullscreen chrome flags update via `setState`; keyboard volume/mute show an OSD and reveal fullscreen chrome. Fullscreen auto-hides chrome; empty home Open URL; seek-preview setting applies live; keybind Escape no longer saves; compact mode checks `mounted` after awaits; sleep remaining chip on the dock.
+- **Fix - Windows SMTC:** Commands marshal onto the platform thread; SMTC binds to the Flutter HWND; Clear resets timeline caches.
+- **Fix - macOS bookmarks / Dock:** Folder pick and drops capture bookmarks; Dock reopen shows a hidden window; `NSNumber` duration/position parsing; New Window spawns a process like Win/Linux.
+- **Fix - Linux portable libmpv:** AppImage, tar, and Flatpak **vendor `libmpv.so.2`** (plus non-system DT_NEEDED deps, including ayatana) into `bundle/lib` with `$ORIGIN` RPATH so they start without a host libmpv. deb/rpm still Depends/`Requires` distro `libmpv2` / `mpv-libs`. Desktop `StartupWMClass` matches `run.rosie.dacx`. Flatpak talks to StatusNotifierWatcher. MPRIS no longer emits Seeked every 400ms.
+- **Change - Multi-audio mix withdrawn from UI:** Settings and the ⋯ menu no longer offer mix. Implementation and stored pref stay; `PlaybackMixPolicy.userFacingEnabled` is the restore switch (`docs/ideas/multi-audio-mix.md`).
+- **Fix - file_picker 12.0:** Open/save/enqueue use `PlatformFile` / save `Uri` and platform lock options after the stable 12.0 API.
+- **Docs:** One Windows signing story (Azure Artifact Signing + `SKIP_WIN_CODESIGN=1`).
 
 ## Changes in `v0.11.1:`
 ### IMPORTANT: A bug in `v0.11.0` (Stable) broke the self-updater for Windows. Windows users need to manually download the `v0.11.1` or future installers manually to fix the issue and continue receiving updates.

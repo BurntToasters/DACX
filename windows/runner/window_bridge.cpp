@@ -39,14 +39,22 @@ std::unordered_map<flutter::BinaryMessenger*, std::unique_ptr<MethodChannel>>
 ITaskbarList3* g_taskbar = nullptr;
 bool g_idle_inhibit_active = false;
 
+int g_idle_inhibit_count = 0;
+
 void SetIdleInhibit(bool inhibit) {
   if (inhibit) {
-    SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED |
-                            ES_DISPLAY_REQUIRED);
-    g_idle_inhibit_active = true;
-  } else {
-    SetThreadExecutionState(ES_CONTINUOUS);
-    g_idle_inhibit_active = false;
+    g_idle_inhibit_count++;
+    if (g_idle_inhibit_count == 1) {
+      SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED |
+                              ES_DISPLAY_REQUIRED);
+      g_idle_inhibit_active = true;
+    }
+  } else if (g_idle_inhibit_count > 0) {
+    g_idle_inhibit_count--;
+    if (g_idle_inhibit_count == 0) {
+      SetThreadExecutionState(ES_CONTINUOUS);
+      g_idle_inhibit_active = false;
+    }
   }
 }
 
@@ -207,6 +215,29 @@ void RegisterPrimaryWindow(FlutterWindow* window) {
   std::lock_guard<std::mutex> lock(g_mutex);
   g_primary_window = window;
   g_primary_alive = (window != nullptr);
+}
+
+void ActivatePrimaryWindow() {
+  HWND hwnd = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_primary_window != nullptr) {
+      hwnd = g_primary_window->GetHandle();
+    }
+  }
+  if (hwnd == nullptr) return;
+  DWORD pid = 0;
+  ::GetWindowThreadProcessId(hwnd, &pid);
+  if (pid != 0) {
+    ::AllowSetForegroundWindow(pid);
+  }
+  if (::IsIconic(hwnd)) {
+    ::ShowWindow(hwnd, SW_RESTORE);
+  } else {
+    ::ShowWindow(hwnd, SW_SHOW);
+  }
+  ::BringWindowToTop(hwnd);
+  ::SetForegroundWindow(hwnd);
 }
 
 void NotifyWindowDestroyed(FlutterWindow* window) {

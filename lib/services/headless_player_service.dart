@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 
+import '../playback/player_path_utils.dart';
 import 'player_service.dart';
 
 /// In-memory [IPlayerService] for widget tests without libmpv.
@@ -257,12 +258,16 @@ class HeadlessPlayerService implements IPlayerService {
   }
 
   @override
-  Future<bool> addExternalAudio(String path) =>
-      setProperty('audio-files-add', path);
+  Future<bool> addExternalAudio(String path) {
+    if (PlayerPathUtils.isUnsafeOpenPath(path)) return Future.value(false);
+    return setProperty('audio-files-append', path);
+  }
 
   @override
-  Future<bool> addExternalSubtitle(String path) =>
-      setProperty('sub-files-add', path);
+  Future<bool> addExternalSubtitle(String path) {
+    if (PlayerPathUtils.isUnsafeOpenPath(path)) return Future.value(false);
+    return setProperty('sub-files-append', path);
+  }
 
   /// Test helper to push synthetic stream events into listeners.
   @visibleForTesting

@@ -12,6 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'l10n/app_localizations.dart';
+import 'models/playable_source.dart';
+import 'playback/native_runtime_probe.dart';
 import 'screens/player_screen.dart';
 import 'services/debug_log_service.dart';
 import 'services/hardware_acceleration_service.dart';
@@ -22,6 +24,7 @@ import 'services/tray_service.dart';
 import 'services/trusted_http.dart';
 import 'services/update_service.dart';
 import 'theme/window_visuals.dart';
+import 'widgets/missing_playback_runtime_app.dart';
 
 class _NoBounceScrollBehavior extends MaterialScrollBehavior {
   const _NoBounceScrollBehavior();
@@ -62,10 +65,24 @@ void _installAsyncErrorHandler(DebugLogService debugLog) {
   };
 }
 
+bool _ensurePlaybackRuntime() {
+  if (Platform.isLinux && !NativeRuntimeProbe.libmpvAvailable()) {
+    debugPrint('Dacx: libmpv not found; showing missing-runtime screen.');
+    return false;
+  }
+  try {
+    MediaKit.ensureInitialized();
+    return true;
+  } catch (e, st) {
+    debugPrint('Dacx: MediaKit.ensureInitialized failed: $e\n$st');
+    return false;
+  }
+}
+
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   _installKeyboardStateRecovery();
-  MediaKit.ensureInitialized();
+  final playbackRuntimeReady = _ensurePlaybackRuntime();
   await Window.initialize();
 
   final prefs = await SharedPreferences.getInstance();
@@ -166,17 +183,20 @@ void main(List<String> args) async {
       await showWindowIfReady();
     }),
   );
-  final cliFile = _parseCliFilePath(args);
-  final updateService = UpdateService(debugLog: debugLog, debugSource: 'app');
-
-  runApp(
-    DacxApp(
-      settings: settings,
-      debugLog: debugLog,
-      updateService: updateService,
-      initialFile: cliFile,
-    ),
-  );
+  if (!playbackRuntimeReady) {
+    runApp(MissingPlaybackRuntimeApp(onQuit: () => exit(0)));
+  } else {
+    final cliFile = _parseCliFilePath(args);
+    final updateService = UpdateService(debugLog: debugLog, debugSource: 'app');
+    runApp(
+      DacxApp(
+        settings: settings,
+        debugLog: debugLog,
+        updateService: updateService,
+        initialFile: cliFile,
+      ),
+    );
+  }
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (!firstFrameReady.isCompleted) {
@@ -233,7 +253,11 @@ String? _parseCliFilePath(List<String> args) {
     if (rawArg.trim().isEmpty || rawArg.startsWith('-')) continue;
     if (rawArg == InstanceModeService.newInstanceFlag) continue;
     final candidatePath = _normalizeCliPath(rawArg);
-    if (candidatePath != null && File(candidatePath).existsSync()) {
+    if (candidatePath == null) continue;
+    if (PlayableSource.isSupportedUrl(candidatePath)) {
+      return candidatePath;
+    }
+    if (File(candidatePath).existsSync()) {
       return candidatePath;
     }
   }
@@ -260,6 +284,12 @@ String? _normalizeCliPath(String value) {
       }
       return null;
     }
+  }
+
+  if (uri != null &&
+      (uri.scheme == 'http' || uri.scheme == 'https') &&
+      PlayableSource.isSupportedUrl(trimmed)) {
+    return trimmed;
   }
 
   if (!trimmed.contains(':')) return trimmed;

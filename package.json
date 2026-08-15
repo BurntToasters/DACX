@@ -1,6 +1,6 @@
 {
   "name": "dacx",
-  "version": "0.11.2",
+  "version": "0.11.2-beta.1",
   "private": true,
   "description": "Fast, lightweight cross-platform music and video player for Windows, macOS, and Linux.",
   "license": "GPL-3.0-only",
@@ -52,7 +52,7 @@
     "test:coverage": "fvm flutter test --coverage",
     "coverage:check": "node scripts/check-coverage.js",
     "test:all": "node scripts/test-all.js && npm run test:scripts",
-    "test:scripts": "node --test scripts/post-release-assets.test.js scripts/release-notes.test.cjs scripts/setup-flutter.test.js scripts/update-cacert.test.js",
+    "test:scripts": "node --test scripts/post-release-assets.test.js scripts/release-notes.test.cjs scripts/setup-flutter.test.js scripts/update-cacert.test.js scripts/bundle-linux-native-libs.test.js",
     "test:release-assets": "npm run test:scripts",
     "check:version": "node scripts/check-version-sync.js",
     "check:release-notes": "node scripts/check-release-notes.cjs",

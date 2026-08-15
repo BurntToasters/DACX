@@ -48,12 +48,12 @@ for bundled native runtime notes (libmpv / media_kit).
 
 ## Release VM hardening
 
-Official Windows release builds **should** set in `.env` when an Authenticode certificate is available:
-
-- `WINDOWS_SIGNING_CERT_THUMBPRINT` (or `DACX_WINDOWS_SIGNER_THUMBPRINT`): signs the MSI and bakes the thumbprint for runtime Authenticode checks (optional pin **in addition to** Ed25519)
-- `DACX_REQUIRE_WINDOWS_SIGNER=1`: causes `npm run build:win` to **fail** if the thumbprint is missing
-
-Dev / unsigned MSI builds may omit both; self-update then relies on Ed25519 alone (matches README). Official production releases are fully signed.
+Official Windows release builds require Azure Artifact Signing env vars
+(`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`,
+`AZURE_ARTIFACT_SIGNING_*`). The publisher is passed to Flutter as
+`DACX_WINDOWS_SIGNER_PUBLISHER`. Set `SKIP_WIN_CODESIGN=1` for unsigned local
+MSIs; self-update then relies on Ed25519 alone. Official production releases
+are fully Authenticode-signed.
 
 macOS release builds should set `APPLE_TEAM_ID` (see `scripts/flutter-build-macos.js`).
 

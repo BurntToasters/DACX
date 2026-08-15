@@ -16,11 +16,11 @@
  *   release/Dacx-macOS.dmg           (disk image via hdiutil)
  *
  * Linux produces:
- *   release/Dacx-Linux-x86_64.tar.gz (portable tarball)
- *   release/Dacx-Linux-amd64.deb     (Debian package via dpkg-deb)
- *   release/Dacx-Linux-x86_64.rpm    (RPM package via rpmbuild)
- *   release/Dacx-Linux-x86_64.AppImage (AppImage via appimagetool)
- *   release/Dacx-Linux-x86_64.flatpak  (Flatpak bundle via flatpak-builder)
+ *   release/Dacx-Linux-x86_64.tar.gz (portable tarball; vendored libmpv)
+ *   release/Dacx-Linux-amd64.deb     (Debian package via dpkg-deb; distro libmpv)
+ *   release/Dacx-Linux-x86_64.rpm    (RPM package via rpmbuild; distro libmpv)
+ *   release/Dacx-Linux-x86_64.AppImage (AppImage via appimagetool; vendored libmpv)
+ *   release/Dacx-Linux-x86_64.flatpak  (Flatpak bundle; vendored libmpv)
  */
 
 import fs from "fs";
@@ -28,6 +28,10 @@ import path from "path";
 import { execSync } from "child_process";
 import { fileURLToPath } from "url";
 import { loadLocalDotEnv } from "./xcode-env.js";
+import {
+  overlayLibDirectory,
+  vendorLinuxNativeLibs,
+} from "./bundle-linux-native-libs.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 loadLocalDotEnv();
@@ -897,26 +901,50 @@ function packageLinux() {
   const iconFile = findIcon();
   installLegalFilesInDir(buildDir);
 
-  // 1. Portable tarball
+  // Distro packages keep host Depends (libmpv2 / mpv-libs). Vendor libmpv
+  // only into the portable copy used by tar / AppImage / Flatpak.
+  buildDeb(buildDir, desktopFile, iconFile);
+  buildRpm(buildDir, desktopFile, iconFile);
+
+  const portableBundle = stagePortableLinuxBundle(buildDir);
+
   const tarName = "Dacx-Linux-x86_64.tar.gz";
   const tarPath = path.join(releaseDir, tarName);
   removeIfExists(tarPath);
   run(
-    `tar -czf "${tarPath}" -C "${path.dirname(buildDir)}" "${path.basename(buildDir)}"`,
+    `tar -czf "${tarPath}" -C "${path.dirname(portableBundle)}" "${path.basename(portableBundle)}"`,
   );
   console.log(`  ✓ ${tarName}`);
 
-  // 2. .deb
-  buildDeb(buildDir, desktopFile, iconFile);
+  buildAppImage(portableBundle, desktopFile, iconFile);
 
-  // 3. .rpm
-  buildRpm(buildDir, desktopFile, iconFile);
-
-  // 4. .AppImage
-  buildAppImage(buildDir, desktopFile, iconFile);
-
-  // 5. .flatpak
+  overlayLibDirectory(
+    path.join(portableBundle, "lib"),
+    path.join(buildDir, "lib"),
+  );
   buildFlatpak();
+}
+
+function stagePortableLinuxBundle(buildDir) {
+  const portableRoot = path.join(root, "build", "linux-portable");
+  const portableBundle = path.join(portableRoot, "bundle");
+  if (fs.existsSync(portableRoot)) {
+    fs.rmSync(portableRoot, { recursive: true });
+  }
+  copyDirSync(buildDir, portableBundle);
+  if (!hasCommand("ldd")) {
+    console.error("ldd is required to vendor libmpv into AppImage/tar/Flatpak.");
+    process.exit(1);
+  }
+  if (!hasCommand("patchelf")) {
+    console.error(
+      "patchelf is required to vendor libmpv into AppImage/tar/Flatpak.",
+    );
+    console.error("  Install: sudo apt-get install -y patchelf");
+    process.exit(1);
+  }
+  vendorLinuxNativeLibs(portableBundle);
+  return portableBundle;
 }
 
 function findIcon() {

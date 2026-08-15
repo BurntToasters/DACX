@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:cryptography_plus/cryptography_plus.dart' as cryptography;
@@ -383,6 +382,38 @@ class SelfUpdateService {
         message: message,
       );
     }
+    final lower = message.toLowerCase();
+    if (lower.contains('team id') || lower.contains('teamid')) {
+      return SelfUpdateResult(
+        SelfUpdateOutcome.teamIdMismatch,
+        message: message,
+      );
+    }
+    if (lower.contains('bundle id') ||
+        lower.contains('bundle identifier') ||
+        lower.contains('cfbundleidentifier')) {
+      return SelfUpdateResult(
+        SelfUpdateOutcome.bundleIdentifierMismatch,
+        message: message,
+      );
+    }
+    if (lower.contains('version mismatch') ||
+        lower.contains('cfbundleversion') ||
+        lower.contains('bundle version')) {
+      return SelfUpdateResult(
+        SelfUpdateOutcome.versionMismatch,
+        message: message,
+      );
+    }
+    if (lower.contains('/applications/dacx.app') ||
+        lower.contains('not in /applications') ||
+        lower.contains('install path') ||
+        lower.contains('containment')) {
+      return SelfUpdateResult(
+        SelfUpdateOutcome.gatekeeperRejected,
+        message: message,
+      );
+    }
     return SelfUpdateResult(SelfUpdateOutcome.spawnFailed, message: message);
   }
 
@@ -589,12 +620,10 @@ class SelfUpdateService {
     void Function(SelfUpdateProgress)? onProgress,
   }) async {
     await _cleanUpdateCache();
-    final asset =
-        pickAssetByPattern(
-          info.assets,
-          RegExp(r'^Dacx-Windows-x64\.msi$', caseSensitive: false),
-        ) ??
-        pickAsset(info.assets, '.msi');
+    final asset = pickAssetByPattern(
+      info.assets,
+      RegExp(r'^Dacx-Windows-x64\.msi$', caseSensitive: false),
+    );
     final checksums = pickAsset(info.assets, 'SHA256SUMS-Windows-x64.txt');
     final manifest = pickAsset(info.assets, _windowsManifestName);
     final manifestSignature = pickAsset(
@@ -687,13 +716,25 @@ class SelfUpdateService {
       }
     }
 
-    final helperPath = resolveWindowsUpdateHelperPath();
-    if (helperPath == null || helperPath.isEmpty) {
+    final installedHelper = resolveWindowsUpdateHelperPath();
+    if (installedHelper == null || installedHelper.isEmpty) {
       return const SelfUpdateResult(
         SelfUpdateOutcome.spawnFailed,
         message:
             'dacx-update-helper.exe is missing next to the application. '
             'Reinstall Dacx from the official MSI.',
+      );
+    }
+    final helperPath = stageWindowsUpdateHelper(
+      installedHelperPath: installedHelper,
+      updatesDirectory: cacheDir.path,
+    );
+    if (helperPath == null || helperPath.isEmpty) {
+      return const SelfUpdateResult(
+        SelfUpdateOutcome.spawnFailed,
+        message:
+            'Could not copy dacx-update-helper.exe out of Program Files '
+            'before installing the update.',
       );
     }
 
@@ -984,6 +1025,49 @@ class SelfUpdateService {
       if (helper.existsSync()) return helper.path;
     } catch (_) {}
     return null;
+  }
+
+  /// Destination for a copy of the helper that can outlive msiexec replacing
+  /// `Program Files\Dacx\dacx-update-helper.exe`.
+  @visibleForTesting
+  static String stagedWindowsUpdateHelperPath({
+    required String updatesDirectory,
+  }) {
+    return p.join(updatesDirectory, 'dacx-update-helper.exe');
+  }
+
+  @visibleForTesting
+  static void Function(String source, String dest)? windowsHelperCopyOverride;
+
+  /// Copies the installed helper into `%LOCALAPPDATA%\Dacx\updates` so msiexec
+  /// can replace the copy in Program Files while this process is still running.
+  @visibleForTesting
+  static String? stageWindowsUpdateHelper({
+    required String installedHelperPath,
+    String? updatesDirectory,
+    Map<String, String>? environment,
+  }) {
+    final destDir =
+        updatesDirectory ??
+        p.join(
+          (environment ?? Platform.environment)['LOCALAPPDATA'] ?? '',
+          'Dacx',
+          'updates',
+        );
+    if (destDir.isEmpty) return null;
+    final dest = stagedWindowsUpdateHelperPath(updatesDirectory: destDir);
+    try {
+      final copy = windowsHelperCopyOverride;
+      if (copy != null) {
+        copy(installedHelperPath, dest);
+      } else {
+        Directory(destDir).createSync(recursive: true);
+        File(installedHelperPath).copySync(dest);
+      }
+      return dest;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// UTF-16LE base64 for PowerShell `-EncodedCommand`.

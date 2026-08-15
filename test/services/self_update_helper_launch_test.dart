@@ -1,11 +1,34 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:dacx/services/self_update_service.dart';
 
 void main() {
   group('SelfUpdateService Windows native helper launch', () {
+    test('staged helper path lives under the updates directory', () {
+      const dir = r'C:\Users\dev\AppData\Local\Dacx\updates';
+      expect(
+        SelfUpdateService.stagedWindowsUpdateHelperPath(updatesDirectory: dir),
+        p.join(dir, 'dacx-update-helper.exe'),
+      );
+    });
+
+    test('stageWindowsUpdateHelper copies into updates and returns dest', () {
+      SelfUpdateService.windowsHelperCopyOverride = (source, dest) {
+        expect(source, r'C:\Program Files\Dacx\dacx-update-helper.exe');
+        expect(dest, contains('dacx-update-helper.exe'));
+      };
+      addTearDown(() => SelfUpdateService.windowsHelperCopyOverride = null);
+      const dir = r'C:\Users\dev\AppData\Local\Dacx\updates';
+      final staged = SelfUpdateService.stageWindowsUpdateHelper(
+        installedHelperPath: r'C:\Program Files\Dacx\dacx-update-helper.exe',
+        updatesDirectory: dir,
+      );
+      expect(staged, p.join(dir, 'dacx-update-helper.exe'));
+    });
+
     test('builds a quoted helper command line', () {
       final cmd = SelfUpdateService.buildWindowsUpdateHelperCommandLine(
         helperPath: r'C:\Program Files\Dacx\dacx-update-helper.exe',

@@ -65,12 +65,17 @@ void main() {
       SelfUpdateService.updateCacheDirOverride = updateCacheDir;
       SelfUpdateService.windowsUpdateHelperPathOverride =
           r'C:\Program Files\Dacx\dacx-update-helper.exe';
+      SelfUpdateService.windowsHelperCopyOverride = (source, dest) {
+        File(dest).parent.createSync(recursive: true);
+        File(dest).writeAsBytesSync(const [0]);
+      };
     });
-    tearDown(() async {
+    tearDown(() {
       SelfUpdateService.windowsUpdateHelperPathOverride = null;
       SelfUpdateService.updateCacheDirOverride = null;
-      if (await tempRoot.exists()) {
-        await tempRoot.delete(recursive: true);
+      SelfUpdateService.windowsHelperCopyOverride = null;
+      if (tempRoot.existsSync()) {
+        tempRoot.deleteSync(recursive: true);
       }
     });
 

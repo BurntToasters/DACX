@@ -14,6 +14,8 @@ enum MediaSessionDispatchKind {
   setShuffle,
   setVolume,
   setRate,
+  raise,
+  quit,
   noop,
 }
 
@@ -100,6 +102,10 @@ abstract final class MediaSessionCommandDispatch {
       case 'rate':
         final r = (cmd.value ?? 1.0).clamp(0.25, 4.0);
         return MediaSessionDispatch(MediaSessionDispatchKind.setRate, rate: r);
+      case 'raise':
+        return const MediaSessionDispatch(MediaSessionDispatchKind.raise);
+      case 'quit':
+        return const MediaSessionDispatch(MediaSessionDispatchKind.quit);
       default:
         return const MediaSessionDispatch(MediaSessionDispatchKind.noop);
     }

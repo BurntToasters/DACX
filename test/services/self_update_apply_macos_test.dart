@@ -69,6 +69,19 @@ void main() {
       final result = SelfUpdateService.mapMacInstallRejection('helper busy');
       expect(result.outcome, SelfUpdateOutcome.spawnFailed);
     });
+
+    test('maps team id and containment strings to dedicated outcomes', () {
+      expect(
+        SelfUpdateService.mapMacInstallRejection('Team ID mismatch').outcome,
+        SelfUpdateOutcome.teamIdMismatch,
+      );
+      expect(
+        SelfUpdateService.mapMacInstallRejection(
+          'not in /Applications/Dacx.app',
+        ).outcome,
+        SelfUpdateOutcome.gatekeeperRejected,
+      );
+    });
   });
 
   group('SelfUpdateService.applyMacosUpdate', () {
