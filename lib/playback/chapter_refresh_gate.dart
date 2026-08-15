@@ -9,12 +9,15 @@ class ChapterRefreshGate {
   }
 
   /// Returns true when chapter metadata should be re-fetched.
+  ///
+  /// Does not record [path]/[chapterCount] until [markFetched] after a
+  /// successful property read, so a failed fetch can retry.
   bool shouldRefresh({required String? path, required int chapterCount}) {
-    if (path == _path && chapterCount == _count) {
-      return false;
-    }
+    return path != _path || chapterCount != _count;
+  }
+
+  void markFetched({required String? path, required int chapterCount}) {
     _path = path;
     _count = chapterCount;
-    return true;
   }
 }

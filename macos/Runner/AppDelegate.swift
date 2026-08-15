@@ -1,5 +1,4 @@
 import Cocoa
-import CoreServices
 import FlutterMacOS
 import IOKit.pwr_mgt
 import os.log
@@ -82,21 +81,7 @@ class AppDelegate: FlutterAppDelegate {
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
     super.applicationDidFinishLaunching(notification)
-    refreshLaunchServicesRegistrationInBackground()
     configureOpenFileChannelsIfNeeded()
-  }
-
-  /// Re-registers the running bundle with Launch Services
-  private func refreshLaunchServicesRegistrationInBackground() {
-    let bundleURL = Bundle.main.bundleURL
-    DispatchQueue.global(qos: .utility).async {
-      let status = LSRegisterURL(bundleURL as CFURL, true)
-      if status == noErr {
-        os_log("LSRegisterURL(%{private}@) succeeded", log: dacxLog, type: .info, bundleURL.path)
-      } else {
-        os_log("LSRegisterURL(%{private}@) failed with OSStatus %d", log: dacxLog, type: .error, bundleURL.path, status)
-      }
-    }
   }
 
   /// Called by `MainFlutterWindow.configureFlutterContent()` for both the
@@ -296,7 +281,7 @@ class AppDelegate: FlutterAppDelegate {
       _ = window.cascadeTopLeft(from: NSPoint(x: refWin.frame.minX, y: refWin.frame.maxY))
     }
     window.makeKeyAndOrderFront(nil)
-    NSApp.activate(ignoringOtherApps: true)
+    NSApp.activate()
     return true
   }
 
@@ -341,7 +326,22 @@ class AppDelegate: FlutterAppDelegate {
   override func application(_ sender: NSApplication, openFile filename: String) -> Bool {
     os_log("application(_:openFile:) received: %{private}@", log: dacxLog, type: .info, filename)
     let url = URL(fileURLWithPath: filename)
+    let scoped = url.startAccessingSecurityScopedResource()
+    defer {
+      if scoped { url.stopAccessingSecurityScopedResource() }
+    }
     handleOpenFile(filename, bookmark: securityScopedBookmark(for: url))
+    return true
+  }
+
+  override func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+    if flag { return true }
+    if let window = NSApp.windows.first(where: { $0.isVisible == false }) ?? mainFlutterWindow {
+      window.makeKeyAndOrderFront(nil)
+    } else {
+      NSApp.windows.first?.makeKeyAndOrderFront(nil)
+    }
+    NSApp.activate()
     return true
   }
 
@@ -395,7 +395,7 @@ class AppDelegate: FlutterAppDelegate {
 
   /// File → New Window.
   @IBAction func newPlayerWindow(_ sender: Any?) {
-    _ = openNewWindow()
+    invokeFlutterMethod("newWindow")
   }
 
   /// Open Recent → Clear Menu.
@@ -416,9 +416,12 @@ class AppDelegate: FlutterAppDelegate {
     invokeFlutterMethod("openRecent", arguments: path)
   }
 
+  private var idleInhibitCount = 0
+
   private func setIdleInhibit(_ inhibit: Bool) {
     if inhibit {
-      if idleAssertionID != 0 { return }
+      idleInhibitCount += 1
+      if idleInhibitCount > 1 { return }
       let status = IOPMAssertionCreateWithName(
         kIOPMAssertionTypeNoDisplaySleep as CFString,
         IOPMAssertionLevel(kIOPMAssertionLevelOn),
@@ -427,11 +430,15 @@ class AppDelegate: FlutterAppDelegate {
       )
       if status != kIOReturnSuccess {
         idleAssertionID = 0
+        idleInhibitCount = 0
         os_log("IOPMAssertionCreateWithName failed: %d", log: dacxLog, type: .error, status)
       }
-    } else if idleAssertionID != 0 {
-      IOPMAssertionRelease(idleAssertionID)
-      idleAssertionID = 0
+    } else if idleInhibitCount > 0 {
+      idleInhibitCount -= 1
+      if idleInhibitCount == 0, idleAssertionID != 0 {
+        IOPMAssertionRelease(idleAssertionID)
+        idleAssertionID = 0
+      }
     }
   }
 

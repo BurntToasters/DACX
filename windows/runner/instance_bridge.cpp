@@ -1,4 +1,5 @@
 #include "instance_bridge.h"
+#include "window_bridge.h"
 
 #include <flutter/event_channel.h>
 #include <flutter/event_sink.h>
@@ -45,6 +46,12 @@ std::vector<flutter::EventSink<flutter::EncodableValue>*> g_event_sinks;
 HWND g_dispatch_window = nullptr;
 
 constexpr UINT WM_DACX_DELIVER_PATH = WM_USER + 0x42;
+constexpr UINT WM_DACX_ACTIVATE = WM_USER + 0x43;
+constexpr const char kActivateSentinel[] = "__DACX_ACTIVATE__";
+
+#ifndef PIPE_REJECT_REMOTE_CLIENTS
+#define PIPE_REJECT_REMOTE_CLIENTS 0x00000008
+#endif
 
 std::wstring CurrentUserSuffix() {
   wchar_t buf[256];
@@ -105,6 +112,10 @@ LRESULT CALLBACK DispatchWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     DispatchQueuedToSink();
     return 0;
   }
+  if (msg == WM_DACX_ACTIVATE) {
+    ActivatePrimaryWindow();
+    return 0;
+  }
   return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
@@ -120,6 +131,10 @@ void EnsureDispatchWindow() {
   g_dispatch_window = CreateWindowExW(0, kClassName, L"", 0, 0, 0, 0, 0,
                                       HWND_MESSAGE, nullptr, wc.hInstance,
                                       nullptr);
+  if (g_dispatch_window == nullptr) {
+    ::OutputDebugStringW(
+        L"[Dacx] Failed to create instance dispatch window.\n");
+  }
 }
 
 void HandlePipeClient(HANDLE pipe) {
@@ -150,12 +165,22 @@ void HandlePipeClient(HANDLE pipe) {
   for (size_t i = 0; i <= buffer.size(); i++) {
     if (i == buffer.size() || buffer[i] == '\0') {
       if (i > start) {
-        EnqueuePath(buffer.substr(start, i - start));
+        std::string path = buffer.substr(start, i - start);
+        if (path == kActivateSentinel) {
+          if (g_dispatch_window != nullptr) {
+            PostMessageW(g_dispatch_window, WM_DACX_ACTIVATE, 0, 0);
+          }
+        } else if (path.rfind("\\\\", 0) != 0 && path.rfind("//", 0) != 0) {
+          EnqueuePath(path);
+        }
       }
       start = i + 1;
     }
   }
+  // Always restore the primary window: Open With / file payloads used to
+  // enqueue without activating, so tray-hidden Dacx stayed hidden.
   if (g_dispatch_window != nullptr) {
+    PostMessageW(g_dispatch_window, WM_DACX_ACTIVATE, 0, 0);
     PostMessageW(g_dispatch_window, WM_DACX_DELIVER_PATH, 0, 0);
   }
 }
@@ -208,7 +233,8 @@ void PipeServerLoop() {
     HANDLE pipe = CreateNamedPipeW(
         name.c_str(),
         PIPE_ACCESS_INBOUND,
-        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT |
+            PIPE_REJECT_REMOTE_CLIENTS,
         PIPE_UNLIMITED_INSTANCES, kPipeBufferSize, kPipeBufferSize, 0,
         restricted ? &sa : nullptr);
     if (acl) LocalFree(acl);
@@ -259,6 +285,35 @@ bool ConsumeNewInstanceFlag(std::vector<std::string>& args) {
 
 bool ForwardToRunningInstance(const std::vector<std::string>& file_paths) {
   if (file_paths.empty()) return false;
+
+  // The secondary process still owns the foreground lock. Vouch for the
+  // primary (and restore it here) so ActivatePrimaryWindow is not denied.
+  HWND hwnd = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"Dacx");
+  if (hwnd == nullptr) {
+    hwnd = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", nullptr);
+  }
+  if (hwnd != nullptr) {
+    DWORD pid = 0;
+    const DWORD tid = ::GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != 0) {
+      ::AllowSetForegroundWindow(pid);
+    }
+    if (::IsIconic(hwnd)) {
+      ::ShowWindow(hwnd, SW_RESTORE);
+    } else {
+      ::ShowWindow(hwnd, SW_SHOW);
+    }
+    HWND fg = ::GetForegroundWindow();
+    const DWORD fgTid = ::GetWindowThreadProcessId(fg, nullptr);
+    if (fgTid != 0 && tid != 0 && fgTid != tid) {
+      ::AttachThreadInput(fgTid, tid, TRUE);
+    }
+    ::BringWindowToTop(hwnd);
+    ::SetForegroundWindow(hwnd);
+    if (fgTid != 0 && tid != 0 && fgTid != tid) {
+      ::AttachThreadInput(fgTid, tid, FALSE);
+    }
+  }
 
   std::string payload;
   for (const auto& path : file_paths) {

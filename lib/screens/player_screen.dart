@@ -6,6 +6,7 @@ import 'dart:ui';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -48,6 +49,7 @@ import '../playback/player_ui_policies.dart';
 import '../playback/chapter_navigation_policy.dart';
 import '../playback/drop_path_batch_policy.dart';
 import '../playback/enqueue_policy.dart';
+import '../playback/file_picker_path.dart';
 import '../playback/linux_install_kind.dart';
 import '../playback/m3u_playlist.dart';
 import '../playback/playback_speed_policy.dart';
@@ -77,6 +79,8 @@ import '../widgets/seek_slider.dart';
 import '../widgets/transport_controls.dart';
 import 'settings_screen.dart';
 
+const _filePickerWindowsOptions = WindowsOptions(lockParentWindow: true);
+const _filePickerLinuxOptions = LinuxOptions(lockParentWindow: true);
 const _resumeSaveInterval = Duration(seconds: 5);
 const _seekStep = Duration(seconds: 5);
 const _seekStepBack = Duration(seconds: -5);
@@ -153,6 +157,11 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   PlayerSettingsSyncState _settingsSyncState = const PlayerSettingsSyncState();
 
   bool _isDisposed = false;
+  bool _stopInProgress = false;
+  String? _appliedVideoHwDec;
+  Timer? _fullscreenChromeHideTimer;
+  Timer? _mediaSurfaceTapTimer;
+  bool _fullscreenChromeVisible = true;
 
   // Tracks / chapters / OSD state
   Timer? _osdHideTimer;
@@ -277,6 +286,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
             enableHardwareAcceleration: hwEnabled,
           ),
         );
+        _appliedVideoHwDec = hwDec;
       }
     }
     _mediaSession = MediaSessionService(debugLog: widget.debugLog);
@@ -429,13 +439,18 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
           tracks,
         );
         if (albumArtTrack != null) {
+          final gen = _playback.loadGeneration;
           unawaited(
             _playerService
                 .setVideoTrack(albumArtTrack)
                 .then((_) async {
                   // Let the album-art track settle before exporting for OS chrome.
                   await Future<void>.delayed(const Duration(milliseconds: 120));
-                  if (!mounted || _isDisposed) return;
+                  if (!mounted ||
+                      _isDisposed ||
+                      !_playback.isLoadCurrent(gen)) {
+                    return;
+                  }
                   final source = _player.currentSource;
                   if (source != null && _settings.mediaSessionEnabled) {
                     unawaited(_pushMediaSessionMetadata(source));
@@ -473,11 +488,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       }),
       _playerService.tracksStream.listen((tracks) {
         if (!mounted || _isDisposed) return;
-        if (_player.fileOpenInProgress) return;
+        if (_stopInProgress || _player.fileOpenInProgress) return;
         _cacheTracksForCurrentLoad(tracks, refreshChapters: true);
       }),
       _playerService.completedStream.listen((completed) {
         if (!mounted || _isDisposed || !completed) return;
+        if (_stopInProgress || _playback.loadQueue.isBusy) return;
+        if (_player.currentSource == null) return;
         setState(() => _player.position = Duration.zero);
         if (widget.debugLog.isEnabled) {
           _log('playback_completed');
@@ -608,6 +625,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       ).setMethodCallHandler(null);
     }
     _osdHideTimer?.cancel();
+    _fullscreenChromeHideTimer?.cancel();
+    _mediaSurfaceTapTimer?.cancel();
     _resumeSaveTimer?.cancel();
     _persistResumePosition();
     _log('player_dispose');
@@ -673,20 +692,28 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
 
   Future<String> _resolveSandboxedPath(String requestedPath) async {
     if (!BookmarkService.isSupported) return requestedPath;
-    final bookmark = _settings.fileBookmark(requestedPath);
+    final coveringKey = _settings.coveringBookmarkKey(requestedPath);
+    final bookmarkKey = coveringKey ?? requestedPath;
+    final bookmark = _settings.fileBookmark(bookmarkKey);
     if (bookmark == null || bookmark.isEmpty) return requestedPath;
     final resolved = await BookmarkService.resolveAndStart(bookmark);
     if (resolved == null) {
-      _settings.removeFileBookmark(requestedPath);
+      // A covering folder bookmark may still be valid for siblings.
+      if (coveringKey == null || coveringKey == requestedPath) {
+        _settings.removeFileBookmark(requestedPath);
+      }
       return requestedPath;
     }
     _releaseActiveBookmark();
     _activeBookmarkToken = resolved.token.isNotEmpty ? resolved.token : null;
     final bookmarkToPersist = resolved.refreshed ?? bookmark;
-    if (resolved.path != requestedPath) {
+    if (resolved.path != bookmarkKey) {
       _settings.setFileBookmark(resolved.path, bookmarkToPersist);
     } else if (resolved.stale && resolved.refreshed != null) {
-      _settings.setFileBookmark(requestedPath, resolved.refreshed!);
+      _settings.setFileBookmark(bookmarkKey, resolved.refreshed!);
+    }
+    if (coveringKey != null && coveringKey != requestedPath) {
+      return requestedPath;
     }
     return resolved.path;
   }
@@ -738,7 +765,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     }
 
     if (delta.multiAudioMix) {
-      unawaited(_applyMultiAudioMix());
+      unawaited(() async {
+        final applied = await _applyMultiAudioMix(announce: true);
+        if (_currentFile != null && applied) {
+          await _reloadCurrentForMixChange();
+        }
+      }());
     }
 
     if (delta.mediaSessionEnabled != null) {
@@ -751,6 +783,19 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
 
     if (delta.hwDec != null) {
       _applyHwDec(delta.hwDec!);
+    }
+
+    if (delta.seekPreviewEnabled != null) {
+      unawaited(_seekPreviewService.setEnabled(delta.seekPreviewEnabled!));
+      final source = _player.currentSource;
+      if (delta.seekPreviewEnabled! &&
+          source != null &&
+          source.isFile &&
+          !_player.isAudioFile) {
+        unawaited(_seekPreviewService.setSource(source.value));
+      } else if (!delta.seekPreviewEnabled!) {
+        unawaited(_seekPreviewService.setSource(null));
+      }
     }
 
     if (delta.alwaysOnTop != null) {
@@ -818,6 +863,9 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
           return null;
         case InstanceModeService.savePlaylistMethod:
           unawaited(_exportPlaylistQueue());
+          return null;
+        case InstanceModeService.newWindowMethod:
+          unawaited(InstanceModeService.openNewWindow());
           return null;
         case InstanceModeService.clearRecentFilesMethod:
           _settings.clearRecentFiles();
@@ -976,6 +1024,19 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
             );
           }),
     );
+    if (_headlessMedia || widget.videoController != null) return;
+    if (_appliedVideoHwDec == value && _videoController != null) return;
+    final native = _playerService;
+    if (native is! PlayerService) return;
+    _videoController = VideoController(
+      native.player,
+      configuration: VideoControllerConfiguration(
+        hwdec: value,
+        enableHardwareAcceleration: _shouldEnableHardwareAcceleration(value),
+      ),
+    );
+    _appliedVideoHwDec = value;
+    if (mounted) setState(() {});
   }
 
   /// Keeps settings, playlist, and OS media-session shuffle in sync.
@@ -1134,7 +1195,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       final initialDirectory = _settings.lastOpenDirectory;
       final file = await FilePicker.pickFile(
         type: FileType.any,
-        lockParentWindow: true,
+        windowsOptions: _filePickerWindowsOptions,
+        linuxOptions: _filePickerLinuxOptions,
         initialDirectory: initialDirectory,
       );
 
@@ -1142,8 +1204,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         _log('file_picker_cancelled');
         return;
       }
-      final path = file.path;
-      if (path == null || path.trim().isEmpty) {
+      final path = FilePickerPath.fromPlatformFilePath(file.path);
+      if (path == null) {
         _log('file_picker_invalid_path', severity: DebugSeverity.warn);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1157,8 +1219,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         return;
       }
 
-      await _captureBookmarkFor(path.trim());
-      await _openPathOrPlaylist(path.trim());
+      await _captureBookmarkFor(path);
+      await _openPathOrPlaylist(path);
     } on PlatformException catch (e) {
       _log(
         'file_picker_platform_exception',
@@ -1200,7 +1262,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     _log('folder_picker_open_requested');
     try {
       final folder = await FilePicker.getDirectoryPath(
-        lockParentWindow: true,
+        windowsOptions: _filePickerWindowsOptions,
+        linuxOptions: _filePickerLinuxOptions,
         initialDirectory: _settings.lastOpenDirectory,
       );
       if (folder == null || folder.trim().isEmpty) {
@@ -1210,6 +1273,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
       _settings.lastOpenDirectory = folder.trim();
+      await _captureBookmarkFor(folder.trim());
       final scan = await MediaFolderScanner.scan(
         folder,
         maxItems: PlaylistService.maxQueueItems,
@@ -1303,6 +1367,18 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     bool forcePlay = false,
   }) async {
     final trimmed = filePath.trim();
+    if (trimmed.isEmpty) return;
+    if (PlayableSource.isSupportedUrl(trimmed)) {
+      await _loadSource(PlayableSource.url(trimmed), forcePlay: forcePlay);
+      return;
+    }
+    if (PlayerPathUtils.isUnsafeOpenPath(trimmed)) {
+      _handleLoadValidationFailure(
+        failure: SourceLoadValidationFailure.unsafePath,
+        detailsBuilder: () => {'path': trimmed},
+      );
+      return;
+    }
     if (M3uPlaylist.isPlaylistPath(trimmed)) {
       await _importPlaylistFile(trimmed, playNow: true);
       return;
@@ -1316,12 +1392,17 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: M3uPlaylist.extensions.toList(),
-        lockParentWindow: true,
+        windowsOptions: _filePickerWindowsOptions,
+        linuxOptions: _filePickerLinuxOptions,
         initialDirectory: _settings.lastOpenDirectory,
       );
-      final path = file?.path?.trim();
-      if (path == null || path.isEmpty) return;
+      final path = FilePickerPath.fromPlatformFilePath(file?.path);
+      if (path == null) return;
       await _captureBookmarkFor(path);
+      final parent = p.dirname(path);
+      if (parent.isNotEmpty && parent != path) {
+        await _captureBookmarkFor(parent);
+      }
       await _importPlaylistFile(path, playNow: playNow);
     } on PlatformException catch (e) {
       _log(
@@ -1329,6 +1410,34 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         message: e.message ?? e.code,
         severity: DebugSeverity.error,
       );
+      if (mounted) {
+        final rawDetail = e.message?.trim();
+        final detail = rawDetail == null || rawDetail.isEmpty
+            ? e.code
+            : rawDetail;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).snackFilePickerFailed(detail),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      _log(
+        'playlist_picker_failed',
+        message: e.toString(),
+        severity: DebugSeverity.error,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).snackUnableToOpenFilePicker,
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -1338,16 +1447,19 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     final l10n = AppLocalizations.of(context);
     try {
       final content = M3uPlaylist.encode(_playlist.items);
-      final path = await FilePicker.saveFile(
+      final saved = await FilePicker.saveFile(
         dialogTitle: l10n.buttonSavePlaylist,
         fileName: 'playlist.m3u',
         type: FileType.custom,
         allowedExtensions: const ['m3u'],
+        mimeType: 'audio/x-mpegurl',
         bytes: Uint8List.fromList(utf8.encode(content)),
-        lockParentWindow: true,
+        windowsOptions: _filePickerWindowsOptions,
+        linuxOptions: _filePickerLinuxOptions,
         initialDirectory: _settings.lastOpenDirectory,
       );
-      if (path == null || path.trim().isEmpty) return;
+      final path = FilePickerPath.fromSaveUri(saved);
+      if (path == null) return;
       _rememberLastOpenDirectory(path);
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1389,6 +1501,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     String playlistPath, {
     required bool playNow,
   }) async {
+    if (PlayerPathUtils.isUnsafeOpenPath(playlistPath)) {
+      _handleLoadValidationFailure(
+        failure: SourceLoadValidationFailure.unsafePath,
+        detailsBuilder: () => {'path': playlistPath},
+      );
+      return;
+    }
     try {
       final sources = await M3uPlaylist.parseFile(playlistPath);
       if (sources.isEmpty) {
@@ -1461,8 +1580,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     PlayableSource source, {
     Duration? duration,
     bool exportArt = true,
+    int? gen,
   }) async {
     if (!_settings.mediaSessionEnabled || _isDisposed) return;
+    if (gen != null && !_playback.isLoadCurrent(gen)) return;
     String? artist;
     String? album;
     String? metaTitle;
@@ -1473,6 +1594,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     } catch (_) {
       // Metadata is best-effort; title falls back to display name.
     }
+    if (gen != null && !_playback.isLoadCurrent(gen)) return;
     String? artUri;
     if (exportArt && _player.hasAlbumArtTrack) {
       artUri = await _exportAlbumArtForMediaSession();
@@ -1498,6 +1620,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       album: (album != null && album.trim().isNotEmpty) ? album.trim() : null,
       duration: duration ?? _player.duration,
       artUri: artUri,
+      trackIdentity: '${source.value}#${_playback.loadGeneration}',
     );
   }
 
@@ -1583,16 +1706,21 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     unawaited(_syncWindowsJumpList());
   }
 
-  Future<void> _refreshChaptersIfNeeded() async {
+  Future<void> _refreshChaptersIfNeeded({int? gen}) async {
+    if (gen != null && !_playback.isLoadCurrent(gen)) return;
     final countRaw = await _playerService.getProperty('chapter-list/count');
     final count = int.tryParse(countRaw ?? '') ?? 0;
+    if (gen != null && !_playback.isLoadCurrent(gen)) return;
     if (!_playback.chapterGate.shouldRefresh(
       path: _currentFile,
       chapterCount: count,
     )) {
       return;
     }
-    await _refreshChapters(expectedCount: count);
+    await _refreshChapters(expectedCount: count, gen: gen);
+    if (!mounted || _isDisposed) return;
+    if (gen != null && !_playback.isLoadCurrent(gen)) return;
+    _playback.chapterGate.markFetched(path: _currentFile, chapterCount: count);
   }
 
   Future<void> _loadSourceInternal(
@@ -1609,15 +1737,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         : PlayableSource.file(await _resolveSandboxedPath(requestedValue));
     final normalizedValue = normalizedSource.value;
 
-    if (syncPlaylist) {
-      _playlist.setPlayingSource(normalizedSource);
-    }
-
     final validation = SourceLoadValidationPolicy.validateNormalizedOpen(
       source: source,
       trimmedValue: requestedValue,
       normalizedSource: normalizedSource,
-      fileExists: _headlessMedia || File(normalizedValue).existsSync(),
+      fileExists:
+          _headlessMedia ||
+          !normalizedSource.isFile ||
+          File(normalizedValue).existsSync(),
     );
     if (!validation.isOk) {
       _handleLoadValidationFailure(
@@ -1630,6 +1757,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         },
       );
       return;
+    }
+
+    if (syncPlaylist) {
+      _playlist.setPlayingSource(normalizedSource);
     }
 
     final ext = normalizedSource.extension ?? '';
@@ -1727,6 +1858,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       _player.fileOpenInProgress = false;
     }
 
+    if (_stopInProgress) return;
+
     final postOpen = SourceLoadPostOpenPolicy.plan(
       isLoadCurrent: _playback.isLoadCurrent(gen),
       isDisposed: _isDisposed,
@@ -1739,7 +1872,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       return;
     }
     if (followUp.shouldCacheTracks) {
-      _cacheTracksForCurrentLoad(_playerService.currentTracks);
+      _cacheTracksForCurrentLoad(_playerService.currentTracks, gen: gen);
     }
 
     if (followUp.shouldClearSeekPreview) {
@@ -1785,26 +1918,28 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
 
     _player.resumePathInProgress = followUp.resumeTrackingPath;
     if (followUp.shouldApplyAudioFilters) {
-      unawaited(_applyMergedAudioFilters());
+      await _applyMergedAudioFilters(gen: gen);
     }
     if (followUp.shouldRefreshChapters) {
-      unawaited(_refreshChapters());
+      await _refreshChapters(gen: gen);
     }
     if (followUp.shouldApplyMultiAudioMix) {
-      unawaited(_applyMultiAudioMix());
+      await _applyMultiAudioMix(gen: gen);
     }
     if (followUp.shouldApplyResume && applyResume) {
-      unawaited(_maybeApplyResume(normalizedValue));
+      await _maybeApplyResume(normalizedValue, gen: gen);
     }
     if (followUp.shouldUpdateMediaSessionMetadata) {
-      unawaited(_pushMediaSessionMetadata(normalizedSource));
+      unawaited(_pushMediaSessionMetadata(normalizedSource, gen: gen));
     }
   }
 
   void _cacheTracksForCurrentLoad(
     Tracks tracks, {
     bool refreshChapters = false,
+    int? gen,
   }) {
+    if (gen != null && !_playback.isLoadCurrent(gen)) return;
     final result = _player.cacheTracksForLoad(
       tracks,
       mixLoadState: _mixLoadState,
@@ -1813,13 +1948,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     );
     if (result.audioOnlyChanged) {
       setState(() {});
-      unawaited(_applyMergedAudioFilters());
+      unawaited(_applyMergedAudioFilters(gen: gen));
     }
     if (result.refreshChapters) {
-      unawaited(_refreshChaptersIfNeeded());
+      unawaited(_refreshChaptersIfNeeded(gen: gen));
     }
     if (result.shouldRefreshMix) {
-      unawaited(_applyMultiAudioMix());
+      unawaited(_applyMultiAudioMix(gen: gen));
     }
   }
 
@@ -1872,7 +2007,21 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
 
   Future<void> _applyDroppedPathsExpanded(List<String> paths) async {
     final media = <PlayableSource>[];
+    var inaccessible = 0;
     for (final path in paths) {
+      await _captureBookmarkFor(path);
+      try {
+        if (Directory(path).existsSync()) {
+          final scan = await MediaFolderScanner.scan(
+            path,
+            maxItems: PlaylistService.maxQueueItems,
+          );
+          media.addAll(scan.paths.map(PlayableSource.file));
+          continue;
+        }
+      } catch (_) {
+        // Fall through to file handling.
+      }
       if (M3uPlaylist.isPlaylistPath(path)) {
         try {
           media.addAll(await M3uPlaylist.parseFile(path));
@@ -1886,7 +2035,25 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         }
         continue;
       }
+      if (!_headlessMedia) {
+        try {
+          if (!File(path).existsSync()) {
+            inaccessible++;
+            continue;
+          }
+        } catch (_) {
+          inaccessible++;
+          continue;
+        }
+      }
       media.add(PlayableSource.file(path));
+    }
+    if (inaccessible > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).snackDropPathInaccessible),
+        ),
+      );
     }
     if (media.isEmpty) {
       if (mounted) {
@@ -2060,6 +2227,19 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       customBindings: custom.isEmpty ? null : custom,
     );
 
+    final drawerOpen = _scaffoldKey.currentState?.isEndDrawerOpen ?? false;
+    if (drawerOpen) {
+      switch (shortcut) {
+        case PlayerShortcutAction.seekForward:
+        case PlayerShortcutAction.seekBack:
+        case PlayerShortcutAction.volumeUp:
+        case PlayerShortcutAction.volumeDown:
+          return KeyEventResult.ignored;
+        default:
+          break;
+      }
+    }
+
     switch (shortcut) {
       case PlayerShortcutAction.openFile:
         _log('shortcut_open_file', category: DebugLogCategory.ui);
@@ -2074,6 +2254,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         unawaited(_reopenLastFile());
         return KeyEventResult.handled;
       case PlayerShortcutAction.playPause:
+        _revealFullscreenChrome();
         unawaited(
           _playerService.playPause().catchError((Object e) {
             _log(
@@ -2088,10 +2269,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         return KeyEventResult.handled;
       case PlayerShortcutAction.seekForward:
         _log('shortcut_seek_forward', category: DebugLogCategory.ui);
+        _revealFullscreenChrome();
+        _pulseOsd();
         _seekRelative(_seekStep);
         return KeyEventResult.handled;
       case PlayerShortcutAction.seekBack:
         _log('shortcut_seek_back', category: DebugLogCategory.ui);
+        _revealFullscreenChrome();
+        _pulseOsd();
         _seekRelative(_seekStepBack);
         return KeyEventResult.handled;
       case PlayerShortcutAction.volumeUp:
@@ -2108,6 +2293,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         return KeyEventResult.handled;
       case PlayerShortcutAction.toggleFullscreen:
         _log('shortcut_toggle_fullscreen', category: DebugLogCategory.ui);
+        _revealFullscreenChrome();
         unawaited(_toggleFullscreen());
         return KeyEventResult.handled;
       case PlayerShortcutAction.exitFullscreen:
@@ -2213,6 +2399,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       }),
     );
     _settings.volume = newVol;
+    _revealFullscreenChrome();
+    if (mounted) {
+      _showOsdMessage(AppLocalizations.of(context).osdVolume(newVol.round()));
+    }
     _log(
       'volume_adjusted',
       detailsBuilder: () => {'volume': newVol.toStringAsFixed(2)},
@@ -2236,6 +2426,15 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       }),
     );
     _settings.volume = toggle.newVolume;
+    _revealFullscreenChrome();
+    if (mounted) {
+      final l10n = AppLocalizations.of(context);
+      _showOsdMessage(
+        toggle.newVolume <= 0
+            ? l10n.osdMuted
+            : l10n.osdVolume(toggle.newVolume.round()),
+      );
+    }
     _log(
       wasMuted ? 'mute_disabled' : 'mute_enabled',
       detailsBuilder: () => wasMuted
@@ -2247,14 +2446,47 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   bool _fullscreenToggleInFlight = false;
   bool _isFullscreen = false;
 
+  bool get _showPlayerChrome => !_isFullscreen || _fullscreenChromeVisible;
+
+  void _revealFullscreenChrome() {
+    if (!_isFullscreen) return;
+    if (!_fullscreenChromeVisible && mounted) {
+      setState(() => _fullscreenChromeVisible = true);
+    }
+    _scheduleFullscreenChromeHide();
+  }
+
+  void _scheduleFullscreenChromeHide() {
+    _fullscreenChromeHideTimer?.cancel();
+    if (!_isFullscreen) return;
+    _fullscreenChromeHideTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted || _isDisposed || !_isFullscreen) return;
+      setState(() => _fullscreenChromeVisible = false);
+    });
+  }
+
   @override
   void onWindowEnterFullScreen() {
-    _isFullscreen = true;
+    if (!mounted) return;
+    setState(() {
+      _isFullscreen = true;
+      _fullscreenChromeVisible = true;
+    });
+    _scheduleFullscreenChromeHide();
   }
 
   @override
   void onWindowLeaveFullScreen() {
-    _isFullscreen = false;
+    _fullscreenChromeHideTimer?.cancel();
+    if (!mounted) {
+      _isFullscreen = false;
+      _fullscreenChromeVisible = true;
+      return;
+    }
+    setState(() {
+      _isFullscreen = false;
+      _fullscreenChromeVisible = true;
+    });
   }
 
   /// Escape: close queue drawer → exit fullscreen → otherwise ignore.
@@ -2280,7 +2512,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     try {
       if (!await windowManager.isFullScreen()) return;
       if (!mounted) return;
-      _isFullscreen = true;
+      setState(() => _isFullscreen = true);
       _log('shortcut_exit_fullscreen', category: DebugLogCategory.ui);
       await _exitFullscreen();
     } catch (e) {
@@ -2302,7 +2534,18 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       // Verify state actually changed (Wayland / tiling WMs may reject).
       final actual = await windowManager.isFullScreen();
       if (mounted) {
-        _isFullscreen = actual;
+        setState(() {
+          _isFullscreen = actual;
+          if (actual) {
+            _fullscreenChromeVisible = true;
+          } else {
+            _fullscreenChromeHideTimer?.cancel();
+            _fullscreenChromeVisible = true;
+          }
+        });
+        if (actual) {
+          _scheduleFullscreenChromeHide();
+        }
       }
       if (actual == enabled && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2334,10 +2577,18 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       if (await windowManager.isFullScreen()) {
         await windowManager.setFullScreen(false);
         if (mounted) {
-          _isFullscreen = false;
+          setState(() {
+            _isFullscreen = false;
+            _fullscreenChromeHideTimer?.cancel();
+            _fullscreenChromeVisible = true;
+          });
         }
       } else if (mounted) {
-        _isFullscreen = false;
+        setState(() {
+          _isFullscreen = false;
+          _fullscreenChromeHideTimer?.cancel();
+          _fullscreenChromeVisible = true;
+        });
       }
     } catch (e) {
       _log(
@@ -2363,7 +2614,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         body: GlassShellBackground(
           child: Column(
             children: [
-              const CustomTitleBar(),
+              if (_showPlayerChrome) const CustomTitleBar(),
               Expanded(
                 child: DropTarget(
                   onDragEntered: (_) => _onDragEntered(),
@@ -2409,9 +2660,35 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
                               },
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
+                                onTap: _currentFile == null
+                                    ? null
+                                    : () {
+                                        _revealFullscreenChrome();
+                                        _mediaSurfaceTapTimer?.cancel();
+                                        _mediaSurfaceTapTimer = Timer(
+                                          const Duration(milliseconds: 220),
+                                          () {
+                                            unawaited(
+                                              _playerService
+                                                  .playPause()
+                                                  .catchError((Object e) {
+                                                    _log(
+                                                      'media_surface_tap_play_pause_failed',
+                                                      category:
+                                                          DebugLogCategory.ui,
+                                                      message: e.toString(),
+                                                      severity:
+                                                          DebugSeverity.warn,
+                                                    );
+                                                  }),
+                                            );
+                                          },
+                                        );
+                                      },
                                 onDoubleTap: _currentFile == null
                                     ? null
                                     : () {
+                                        _mediaSurfaceTapTimer?.cancel();
                                         _log(
                                           'media_surface_double_tap',
                                           category: DebugLogCategory.ui,
@@ -2419,36 +2696,57 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
                                         unawaited(_toggleFullscreen());
                                       },
                                 child: MouseRegion(
-                                  onHover: (_) => _pulseOsd(),
-                                  child: Stack(
-                                    children: [
-                                      Positioned.fill(
-                                        child: _buildMediaSurface(),
-                                      ),
-                                      if (_currentFile != null &&
-                                          _settings.osdEnabled)
+                                  cursor:
+                                      !_isFullscreen || _fullscreenChromeVisible
+                                      ? MouseCursor.defer
+                                      : SystemMouseCursors.none,
+                                  onHover: (_) {
+                                    _pulseOsd();
+                                    _revealFullscreenChrome();
+                                  },
+                                  child: Listener(
+                                    onPointerSignal: (event) {
+                                      if (event is PointerScrollEvent &&
+                                          _currentFile != null) {
+                                        _revealFullscreenChrome();
+                                        if (event.scrollDelta.dy < 0) {
+                                          _adjustVolume(5);
+                                        } else if (event.scrollDelta.dy > 0) {
+                                          _adjustVolume(-5);
+                                        }
+                                      }
+                                    },
+                                    child: Stack(
+                                      children: [
                                         Positioned.fill(
-                                          child: OsdOverlay(
-                                            title: _player.osdTitle(),
-                                            position: _player.position,
-                                            duration: _player.duration,
-                                            visible: _player.osdVisible,
-                                            transientMessage:
-                                                PlayerController.stripOsdTimestamp(
-                                                  _player.osdTransientMessage,
-                                                ),
-                                          ),
+                                          child: _buildMediaSurface(),
                                         ),
-                                      if (_compactMode)
-                                        Positioned(
-                                          top: 8,
-                                          left: 8,
-                                          child: CompactExitButton(
-                                            onPressed: () =>
-                                                unawaited(_toggleCompactMode()),
+                                        if (_currentFile != null &&
+                                            _settings.osdEnabled)
+                                          Positioned.fill(
+                                            child: OsdOverlay(
+                                              title: _player.osdTitle(),
+                                              position: _player.position,
+                                              duration: _player.duration,
+                                              visible: _player.osdVisible,
+                                              transientMessage:
+                                                  PlayerController.stripOsdTimestamp(
+                                                    _player.osdTransientMessage,
+                                                  ),
+                                            ),
                                           ),
-                                        ),
-                                    ],
+                                        if (_compactMode)
+                                          Positioned(
+                                            top: 8,
+                                            left: 8,
+                                            child: CompactExitButton(
+                                              onPressed: () => unawaited(
+                                                _toggleCompactMode(),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -2506,7 +2804,9 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
                           ],
                         ),
                       ),
-                      _buildBottomDock(),
+                      _showPlayerChrome
+                          ? _buildBottomDock()
+                          : const SizedBox.shrink(),
                     ],
                   ),
                 ),
@@ -2519,142 +2819,167 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   }
 
   Widget _buildBottomDock() {
-    return GlassChrome(
-      borderOnTop: true,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedSize(
-            duration: _seekBarSizeDuration,
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: _player.duration.inMilliseconds > 0
-                ? Padding(
-                    key: const ValueKey('seek-visible'),
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                    child: Row(
-                      children: [
-                        Text(
-                          PlayerController.formatDuration(_player.position),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        Expanded(
-                          child: SeekSliderWithHover(
-                            position: _player.position,
-                            duration: _player.duration,
-                            previewService: _seekPreviewService,
-                            previewEnabled: PlayerUiPolicies.showSeekPreview(
-                              settings: _settings,
-                              isAudioFile: _player.isAudioFile,
-                            ),
-                            onSeekStart: () => _player.isSeeking = true,
-                            onSeekChange: (value) {
-                              setState(() {
-                                _player.position = Duration(
-                                  milliseconds: value.toInt(),
-                                );
-                              });
-                            },
-                            onSeekEnd: (value) {
-                              _player.isSeeking = false;
-                              unawaited(
-                                _playerService
-                                    .seek(Duration(milliseconds: value.toInt()))
-                                    .catchError((Object e) {
-                                      _log(
-                                        'seek_slider_failed',
-                                        message: e.toString(),
-                                        severity: DebugSeverity.warn,
-                                      );
-                                    }),
-                              );
-                            },
-                          ),
-                        ),
-                        Text(
-                          PlayerController.formatDuration(_player.duration),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+    return ListenableBuilder(
+      listenable: _sleepTimer,
+      builder: (context, _) {
+        final remaining = _sleepTimer.remaining;
+        return GlassChrome(
+          borderOnTop: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (remaining != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: InputChip(
+                      avatar: const Icon(Icons.timer_outlined, size: 16),
+                      label: Text(
+                        '${AppLocalizations.of(context).menuSleepTimer} (${PlayerController.formatDuration(remaining)})',
+                      ),
+                      onDeleted: () => _sleepTimer.cancel(),
                     ),
-                  )
-                : const SizedBox(
-                    key: ValueKey('seek-hidden'),
-                    width: double.infinity,
                   ),
+                ),
+              AnimatedSize(
+                duration: _seekBarSizeDuration,
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: _player.duration.inMilliseconds > 0
+                    ? Padding(
+                        key: const ValueKey('seek-visible'),
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                        child: Row(
+                          children: [
+                            Text(
+                              PlayerController.formatDuration(_player.position),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            Expanded(
+                              child: SeekSliderWithHover(
+                                position: _player.position,
+                                duration: _player.duration,
+                                previewService: _seekPreviewService,
+                                previewEnabled:
+                                    PlayerUiPolicies.showSeekPreview(
+                                      settings: _settings,
+                                      isAudioFile: _player.isAudioFile,
+                                    ),
+                                onSeekStart: () => _player.isSeeking = true,
+                                onSeekChange: (value) {
+                                  setState(() {
+                                    _player.position = Duration(
+                                      milliseconds: value.toInt(),
+                                    );
+                                  });
+                                },
+                                onSeekEnd: (value) {
+                                  _player.isSeeking = false;
+                                  unawaited(
+                                    _playerService
+                                        .seek(
+                                          Duration(milliseconds: value.toInt()),
+                                        )
+                                        .catchError((Object e) {
+                                          _log(
+                                            'seek_slider_failed',
+                                            message: e.toString(),
+                                            severity: DebugSeverity.warn,
+                                          );
+                                        }),
+                                  );
+                                },
+                              ),
+                            ),
+                            Text(
+                              PlayerController.formatDuration(_player.duration),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SizedBox(
+                        key: ValueKey('seek-hidden'),
+                        width: double.infinity,
+                      ),
+              ),
+              TransportControls(
+                isPlaying: _player.isPlaying,
+                volume: _player.volume,
+                hasMedia: _currentFile != null,
+                speed: _settings.speed,
+                loopMode: _settings.loopMode,
+                recentFiles: _settings.recentFiles,
+                onPlayPause: () async {
+                  _log(
+                    'control_play_pause_pressed',
+                    category: DebugLogCategory.ui,
+                  );
+                  try {
+                    await _playerService.playPause();
+                  } catch (e) {
+                    _log(
+                      'control_play_pause_failed',
+                      category: DebugLogCategory.ui,
+                      message: e.toString(),
+                      severity: DebugSeverity.warn,
+                    );
+                  }
+                },
+                onStop: () async {
+                  _log('control_stop_pressed', category: DebugLogCategory.ui);
+                  await _stopPlaybackAndResetUi();
+                },
+                onOpenFile: _openFile,
+                onOpenFolder: () => unawaited(_openFolder()),
+                onOpenUrl: () => unawaited(_openUrl()),
+                onReopenLast: () {
+                  _log(
+                    'control_reopen_last_pressed',
+                    category: DebugLogCategory.ui,
+                  );
+                  unawaited(_reopenLastFile());
+                },
+                onVolumeChanged: (vol) async {
+                  _log(
+                    'control_volume_changed',
+                    category: DebugLogCategory.ui,
+                    detailsBuilder: () => {'volume': vol.toStringAsFixed(2)},
+                  );
+                  try {
+                    await _playerService.setVolume(vol);
+                    _settings.volume = vol;
+                  } catch (e) {
+                    _log(
+                      'control_volume_apply_failed',
+                      category: DebugLogCategory.ui,
+                      message: e.toString(),
+                      severity: DebugSeverity.warn,
+                    );
+                  }
+                },
+                onLoopModeChanged: (mode) {
+                  _log(
+                    'control_loop_mode_changed',
+                    category: DebugLogCategory.ui,
+                    detailsBuilder: () => {'loop_mode': mode.name},
+                  );
+                  _settings.loopMode = mode;
+                },
+                onRecentFileSelected: _loadRecentFile,
+                onSettingsPressed: _openSettings,
+                onMoreActions: _showMoreMenu,
+                onPrevious: () => unawaited(_advancePlaylist(-1)),
+                onNext: () => unawaited(_advancePlaylist(1)),
+                onToggleQueue: () => _scaffoldKey.currentState?.openEndDrawer(),
+                onToggleMute: _toggleMute,
+                onCycleSpeed: _cyclePlaybackSpeed,
+              ),
+            ],
           ),
-          TransportControls(
-            isPlaying: _player.isPlaying,
-            volume: _player.volume,
-            hasMedia: _currentFile != null,
-            speed: _settings.speed,
-            loopMode: _settings.loopMode,
-            recentFiles: _settings.recentFiles,
-            onPlayPause: () async {
-              _log('control_play_pause_pressed', category: DebugLogCategory.ui);
-              try {
-                await _playerService.playPause();
-              } catch (e) {
-                _log(
-                  'control_play_pause_failed',
-                  category: DebugLogCategory.ui,
-                  message: e.toString(),
-                  severity: DebugSeverity.warn,
-                );
-              }
-            },
-            onStop: () async {
-              _log('control_stop_pressed', category: DebugLogCategory.ui);
-              await _playerService.stop();
-              unawaited(_seekPreviewService.setSource(null));
-              setState(_player.clearMediaSurface);
-            },
-            onOpenFile: _openFile,
-            onOpenFolder: () => unawaited(_openFolder()),
-            onReopenLast: () {
-              _log(
-                'control_reopen_last_pressed',
-                category: DebugLogCategory.ui,
-              );
-              unawaited(_reopenLastFile());
-            },
-            onVolumeChanged: (vol) async {
-              _log(
-                'control_volume_changed',
-                category: DebugLogCategory.ui,
-                detailsBuilder: () => {'volume': vol.toStringAsFixed(2)},
-              );
-              try {
-                await _playerService.setVolume(vol);
-                _settings.volume = vol;
-              } catch (e) {
-                _log(
-                  'control_volume_apply_failed',
-                  category: DebugLogCategory.ui,
-                  message: e.toString(),
-                  severity: DebugSeverity.warn,
-                );
-              }
-            },
-            onLoopModeChanged: (mode) {
-              _log(
-                'control_loop_mode_changed',
-                category: DebugLogCategory.ui,
-                detailsBuilder: () => {'loop_mode': mode.name},
-              );
-              _settings.loopMode = mode;
-            },
-            onRecentFileSelected: _loadRecentFile,
-            onSettingsPressed: _openSettings,
-            onMoreActions: _showMoreMenu,
-            onPrevious: () => unawaited(_advancePlaylist(-1)),
-            onNext: () => unawaited(_advancePlaylist(1)),
-            onToggleQueue: () => _scaffoldKey.currentState?.openEndDrawer(),
-            onToggleMute: _toggleMute,
-            onCycleSpeed: _cyclePlaybackSpeed,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -2665,159 +2990,167 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     return Drawer(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      child: GlassDrawerBody(
-        child: SafeArea(
-          child: ListenableBuilder(
-            listenable: _playlist,
-            builder: (context, _) {
-              final items = _playlist.items;
-              return Column(
-                children: [
-                  // Header
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
-                    child: Row(
-                      children: [
-                        Icon(Icons.queue_music, color: colorScheme.primary),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            l10n.dialogPlayQueueTitle,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.info_outline),
-                          tooltip: l10n.tooltipMediaInfo,
-                          onPressed: _currentFile == null
-                              ? null
-                              : () => unawaited(_showMediaInfoDialog()),
-                        ),
-                        if (items.isNotEmpty)
-                          IconButton(
-                            icon: Icon(
-                              _playlist.shuffle
-                                  ? Icons.shuffle_on
-                                  : Icons.shuffle,
-                            ),
-                            tooltip: l10n.tooltipShuffle,
-                            onPressed: () {
-                              _setShuffle(!_playlist.shuffle);
-                            },
-                          ),
-                        if (items.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(Icons.clear_all),
-                            tooltip: l10n.actionClear,
-                            onPressed: () {
-                              _playlist.clear();
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  // List
-                  Expanded(
-                    child: items.isEmpty
-                        ? Center(
+      child: FocusScope(
+        child: GlassDrawerBody(
+          child: SafeArea(
+            child: ListenableBuilder(
+              listenable: _playlist,
+              builder: (context, _) {
+                final items = _playlist.items;
+                return Column(
+                  children: [
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.queue_music, color: colorScheme.primary),
+                          const SizedBox(width: 12),
+                          Expanded(
                             child: Text(
-                              l10n.dialogPlayQueueEmpty,
-                              style: TextStyle(
-                                color: colorScheme.onSurface.withValues(
-                                  alpha: 0.54,
+                              l10n.dialogPlayQueueTitle,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.info_outline),
+                            tooltip: l10n.tooltipMediaInfo,
+                            onPressed: _currentFile == null
+                                ? null
+                                : () => unawaited(_showMediaInfoDialog()),
+                          ),
+                          if (items.isNotEmpty)
+                            IconButton(
+                              icon: Icon(
+                                _playlist.shuffle
+                                    ? Icons.shuffle_on
+                                    : Icons.shuffle,
+                              ),
+                              tooltip: l10n.tooltipShuffle,
+                              onPressed: () {
+                                _setShuffle(!_playlist.shuffle);
+                              },
+                            ),
+                          if (items.isNotEmpty)
+                            IconButton(
+                              icon: const Icon(Icons.clear_all),
+                              tooltip: l10n.actionClear,
+                              onPressed: () => unawaited(_confirmClearQueue()),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    // List
+                    Expanded(
+                      child: items.isEmpty
+                          ? Center(
+                              child: Text(
+                                l10n.dialogPlayQueueEmpty,
+                                style: TextStyle(
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.54,
+                                  ),
                                 ),
                               ),
-                            ),
-                          )
-                        : Semantics(
-                            label: l10n.queueReorderSemantic,
-                            child: ReorderableListView.builder(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              itemCount: items.length,
-                              onReorderItem: (oldIndex, newIndex) {
-                                _playlist.moveItem(oldIndex, newIndex);
-                              },
-                              itemBuilder: (context, index) {
-                                final isCurrent = index == _playlist.index;
-                                final source = items[index];
-                                final name = source.displayName;
+                            )
+                          : Semantics(
+                              label: l10n.queueReorderSemantic,
+                              child: ReorderableListView.builder(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                itemCount: items.length,
+                                onReorderItem: (oldIndex, newIndex) {
+                                  _playlist.moveItem(oldIndex, newIndex);
+                                },
+                                itemBuilder: (context, index) {
+                                  final isCurrent = index == _playlist.index;
+                                  final source = items[index];
+                                  final name = source.displayName;
 
-                                return QueueItemTile(
-                                  key: ValueKey('queue-$index-${source.value}'),
-                                  name: name,
-                                  isCurrent: isCurrent,
-                                  isUrl: source.isUrl,
-                                  playLabel: l10n.actionPlay,
-                                  removeLabel: l10n.actionRemove,
-                                  reorderLabel: l10n.queueReorderSemantic,
-                                  colorScheme: colorScheme,
-                                  onActivate: () {
-                                    _playlist.jumpTo(index);
-                                    unawaited(
-                                      _loadSource(source, syncPlaylist: false),
-                                    );
-                                  },
-                                  onRemove: () {
-                                    unawaited(_removeQueueItem(index));
-                                  },
-                                );
-                              },
+                                  return QueueItemTile(
+                                    key: ValueKey(
+                                      'queue-$index-${source.value}',
+                                    ),
+                                    name: name,
+                                    isCurrent: isCurrent,
+                                    isUrl: source.isUrl,
+                                    playLabel: l10n.actionPlay,
+                                    removeLabel: l10n.actionRemove,
+                                    reorderLabel: l10n.queueReorderSemantic,
+                                    colorScheme: colorScheme,
+                                    onActivate: () {
+                                      _playlist.jumpTo(index);
+                                      unawaited(
+                                        _loadSource(
+                                          source,
+                                          syncPlaylist: false,
+                                        ),
+                                      );
+                                    },
+                                    onRemove: () {
+                                      unawaited(_removeQueueItem(index));
+                                    },
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                  ),
-                  const Divider(height: 1),
-                  // Actions at bottom
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        FilledButton.tonalIcon(
-                          onPressed: _pickFilesToEnqueue,
-                          icon: const Icon(Icons.add),
-                          label: Text(l10n.dialogPlayQueueAddFiles),
-                        ),
-                        FilledButton.tonalIcon(
-                          key: const Key('queue-add-folder-button'),
-                          onPressed: () => unawaited(
-                            _openFolder(playNow: _playlist.isEmpty),
-                          ),
-                          icon: const Icon(Icons.create_new_folder),
-                          label: Text(l10n.buttonOpenFolder),
-                        ),
-                        FilledButton.tonalIcon(
-                          key: const Key('queue-open-playlist-button'),
-                          onPressed: () => unawaited(
-                            _openPlaylistPicker(playNow: _playlist.isEmpty),
-                          ),
-                          icon: const Icon(Icons.queue_music),
-                          label: Text(l10n.buttonOpenPlaylist),
-                        ),
-                        if (items.isNotEmpty)
-                          FilledButton.tonalIcon(
-                            key: const Key('queue-save-playlist-button'),
-                            onPressed: () => unawaited(_exportPlaylistQueue()),
-                            icon: const Icon(Icons.save_alt),
-                            label: Text(l10n.buttonSavePlaylist),
-                          ),
-                        if (items.isNotEmpty)
-                          FilledButton.tonalIcon(
-                            key: const Key('queue-remove-missing-button'),
-                            onPressed: () =>
-                                unawaited(_removeMissingQueueItems()),
-                            icon: const Icon(Icons.cleaning_services),
-                            label: Text(l10n.actionRemoveMissing),
-                          ),
-                      ],
                     ),
-                  ),
-                ],
-              );
-            },
+                    const Divider(height: 1),
+                    // Actions at bottom
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          FilledButton.tonalIcon(
+                            onPressed: _pickFilesToEnqueue,
+                            icon: const Icon(Icons.add),
+                            label: Text(l10n.dialogPlayQueueAddFiles),
+                          ),
+                          FilledButton.tonalIcon(
+                            key: const Key('queue-add-folder-button'),
+                            onPressed: () => unawaited(
+                              _openFolder(playNow: _playlist.isEmpty),
+                            ),
+                            icon: const Icon(Icons.create_new_folder),
+                            label: Text(l10n.buttonOpenFolder),
+                          ),
+                          FilledButton.tonalIcon(
+                            key: const Key('queue-open-playlist-button'),
+                            onPressed: () => unawaited(
+                              _openPlaylistPicker(playNow: _playlist.isEmpty),
+                            ),
+                            icon: const Icon(Icons.queue_music),
+                            label: Text(l10n.buttonOpenPlaylist),
+                          ),
+                          if (items.isNotEmpty)
+                            FilledButton.tonalIcon(
+                              key: const Key('queue-save-playlist-button'),
+                              onPressed: () =>
+                                  unawaited(_exportPlaylistQueue()),
+                              icon: const Icon(Icons.save_alt),
+                              label: Text(l10n.buttonSavePlaylist),
+                            ),
+                          if (items.isNotEmpty)
+                            FilledButton.tonalIcon(
+                              key: const Key('queue-remove-missing-button'),
+                              onPressed: () =>
+                                  unawaited(_removeMissingQueueItems()),
+                              icon: const Icon(Icons.cleaning_services),
+                              label: Text(l10n.actionRemoveMissing),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -2892,6 +3225,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
                         onPressed: () => unawaited(_openPlaylistPicker()),
                         icon: const Icon(Icons.queue_music),
                         label: Text(l10n.buttonOpenPlaylist),
+                      ),
+                      FilledButton.tonalIcon(
+                        key: const Key('open-url-empty-button'),
+                        onPressed: () => unawaited(_openUrl()),
+                        icon: const Icon(Icons.link),
+                        label: Text(l10n.buttonOpenUrl),
                       ),
                       FilledButton.tonalIcon(
                         key: const Key('reopen-last-empty-button'),
@@ -3018,11 +3357,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     if (controller == null) {
       return const ColoredBox(color: Colors.black);
     }
-    return Video(
-      controller: controller,
-      controls: NoVideoControls,
-      fit: fit,
-      fill: fill ?? Colors.transparent,
+    return RepaintBoundary(
+      child: Video(
+        controller: controller,
+        controls: NoVideoControls,
+        fit: fit,
+        fill: fill ?? Colors.transparent,
+      ),
     );
   }
 
@@ -3252,14 +3593,15 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
 
   // ── Chapters ──────────────────────────────────────────────
 
-  Future<void> _refreshChapters({int? expectedCount}) async {
+  Future<void> _refreshChapters({int? expectedCount, int? gen}) async {
+    if (gen != null && !_playback.isLoadCurrent(gen)) return;
     final l10n = AppLocalizations.of(context);
     final list = await ChapterListLoader.load(
       readProperty: _playerService.getProperty,
       expectedCount: expectedCount,
       fallbackTitle: (i) => l10n.chapterFallbackLabel(i + 1),
     );
-    if (!mounted) return;
+    if (!mounted || (gen != null && !_playback.isLoadCurrent(gen))) return;
     setState(() => _player.chapters = list);
   }
 
@@ -3295,7 +3637,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         _showOsdMessage(l10n.osdScreenshotFailed);
         return;
       }
-      final dir = _settings.screenshotDir ?? _defaultScreenshotDir();
+      final requestedDir = _settings.screenshotDir ?? _defaultScreenshotDir();
+      final dir = _settings.screenshotDir != null
+          ? await _resolveSandboxedPath(requestedDir)
+          : requestedDir;
       try {
         Directory(dir).createSync(recursive: true);
       } catch (e) {
@@ -3318,11 +3663,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         sourceValue: source.value,
         displayName: source.displayName,
       );
-      final outPath = ScreenshotPathPolicy.buildOutputPath(
-        directory: dir,
-        baseName: base,
-        format: fmt,
-        timestamp: DateTime.now(),
+      final outPath = ScreenshotPathPolicy.uniqueOutputPath(
+        path: ScreenshotPathPolicy.buildOutputPath(
+          directory: dir,
+          baseName: base,
+          format: fmt,
+          timestamp: DateTime.now(),
+        ),
+        exists: (candidate) => File(candidate).existsSync(),
       );
       try {
         File(outPath).writeAsBytesSync(bytes, flush: true);
@@ -3362,8 +3710,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   }
 
   /// Builds and applies the EQ af chain.
-  Future<void> _applyMergedAudioFilters() async {
+  Future<void> _applyMergedAudioFilters({int? gen}) async {
+    if (gen != null && !_playback.isLoadCurrent(gen)) return;
     final result = await _audioSession.applyMergedAudioFilters();
+    if (gen != null && !_playback.isLoadCurrent(gen)) return;
     if (result.failed) {
       _log(
         'audio_filter_apply_failed',
@@ -3374,14 +3724,26 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   }
 
   void _toggleEqualizer() {
-    _settings.eqEnabled = !_settings.eqEnabled;
-    unawaited(_applyEqualizer());
-    final l10n = AppLocalizations.of(context);
-    _showOsdMessage(
-      l10n.osdEqualizer(
-        _settings.eqEnabled ? l10n.osdStateOn : l10n.osdStateOff,
-      ),
-    );
+    final wantEnabled = !_settings.eqEnabled;
+    _settings.eqEnabled = wantEnabled;
+    unawaited(() async {
+      final result = await _audioSession.applyMergedAudioFilters();
+      if (!mounted || _isDisposed) return;
+      final l10n = AppLocalizations.of(context);
+      if (result.failed) {
+        _settings.eqEnabled = !wantEnabled;
+        _showOsdMessage(l10n.osdEqualizer(l10n.osdStateOff));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.snackPlaybackOperationFailed('equalizer')),
+          ),
+        );
+        return;
+      }
+      _showOsdMessage(
+        l10n.osdEqualizer(wantEnabled ? l10n.osdStateOn : l10n.osdStateOff),
+      );
+    }());
   }
 
   String _eqPresetLabel(AppLocalizations l10n, String id) {
@@ -3408,7 +3770,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   /// disable). Returns `false` when enable was requested but failed; in that
   /// case the Experimental mix toggle is turned back off and the user gets
   /// OSD + snackbar feedback.
-  Future<bool> _applyMultiAudioMix({bool announce = false}) async {
+  Future<bool> _applyMultiAudioMix({bool announce = false, int? gen}) async {
+    if (gen != null && !_playback.isLoadCurrent(gen)) return true;
     final l10n = AppLocalizations.of(context);
     final tracks = _player.currentTracks;
     // No open media yet; keep the preference for the next multi-track file.
@@ -3421,6 +3784,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     if (!shouldMix) {
       // Always clear the property in case a previous file left a graph.
       await _playerService.setProperty('lavfi-complex', '');
+      if (gen != null && !_playback.isLoadCurrent(gen)) return true;
       if (_player.mixActive) {
         _player.mixActive = false;
         if (announce) {
@@ -3441,14 +3805,20 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       await _revertMultiAudioMixFailure(l10n.osdAudioMixUnsupportedIds);
       return false;
     }
-    final videoIds = tracks.video
-        .where((t) => t.id != 'auto' && t.id != 'no')
-        .map((t) => t.id)
-        .where((id) => int.tryParse(id) != null)
-        .toList(growable: false);
+    final videoTrackId = PlaybackMixPolicy.passthroughVideoTrackId(
+      videoIds: tracks.video.map((t) => t.id),
+      isAlbumArtOrImage: (id) {
+        for (final track in tracks.video) {
+          if (track.id == id) {
+            return track.albumart == true || track.image == true;
+          }
+        }
+        return false;
+      },
+    );
     final chain = PlaybackMixPolicy.buildLavfiComplex(
       audioIds: ids,
-      videoTrackId: videoIds.isNotEmpty ? videoIds.first : null,
+      videoTrackId: videoTrackId,
     );
     _log(
       'multi_audio_mix_apply',
@@ -3459,6 +3829,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       },
     );
     final ok = await _playerService.setProperty('lavfi-complex', chain);
+    if (gen != null && !_playback.isLoadCurrent(gen)) return true;
     if (ok) {
       final wasActive = _player.mixActive;
       _player.mixActive = true;
@@ -3495,7 +3866,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       await _loadSource(source, syncPlaylist: false, applyResume: false);
       if (savedPos > Duration.zero) {
         await Future<void>.delayed(_mixReloadDelay);
-        if (mounted) {
+        if (mounted && !_isDisposed && _player.currentSource == source) {
           unawaited(_playerService.seek(savedPos));
         }
       }
@@ -3576,15 +3947,44 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         if (rate != null) {
           _deferMediaSessionSetting(() => _settings.speed = rate);
         }
+      case MediaSessionDispatchKind.raise:
+        unawaited(windowManager.show().catchError((_) {}));
+        unawaited(windowManager.focus().catchError((_) {}));
+      case MediaSessionDispatchKind.quit:
+        unawaited(windowManager.close().catchError((_) {}));
       case MediaSessionDispatchKind.noop:
         break;
     }
   }
 
   Future<void> _stopPlaybackAndResetUi() async {
-    await _playerService.stop();
-    if (!mounted || _isDisposed) return;
-    setState(_player.resetTransport);
+    _stopInProgress = true;
+    _playback.beginLoad();
+    try {
+      await _playback.loadQueue.enqueue(
+        () async {
+          if (_isDisposed) return;
+          _playback.beginLoad();
+          _persistResumePosition();
+          await _playerService.setProperty('lavfi-complex', '');
+          _player.mixActive = false;
+          await _playerService.stop();
+          unawaited(_seekPreviewService.setSource(null));
+          unawaited(_mediaSession.clear());
+          if (!mounted || _isDisposed) return;
+          setState(_player.clearMediaSurface);
+        },
+        onError: (Object e, StackTrace st) {
+          _log(
+            'stop_queue_failed',
+            message: e.toString(),
+            severity: DebugSeverity.warn,
+          );
+        },
+      );
+    } finally {
+      _stopInProgress = false;
+    }
   }
 
   // ── Resume position ─────────────────────────────────
@@ -3608,7 +4008,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     }
   }
 
-  Future<void> _maybeApplyResume(String path) async {
+  Future<void> _maybeApplyResume(String path, {int? gen}) async {
+    if (gen != null && !_playback.isLoadCurrent(gen)) return;
     final l10n = AppLocalizations.of(context);
     final ms = _settings.resumePositionFor(path);
     var action = ResumePlaybackPolicy.applyAction(
@@ -3622,7 +4023,11 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       i++
     ) {
       await Future<void>.delayed(_durationPollInterval);
-      if (_isDisposed || _currentFile != path) return;
+      if (_isDisposed ||
+          _currentFile != path ||
+          (gen != null && !_playback.isLoadCurrent(gen))) {
+        return;
+      }
       action = ResumePlaybackPolicy.applyAction(
         resumeMs: ms,
         durationMs: _player.duration.inMilliseconds,
@@ -3638,9 +4043,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       case ResumeApplyAction.seek:
         break;
     }
+    if (gen != null && !_playback.isLoadCurrent(gen)) return;
     try {
       await _playerService.seek(Duration(milliseconds: ms!));
-      if (mounted) {
+      if (mounted && (gen == null || _playback.isLoadCurrent(gen))) {
         _showOsdMessage(
           l10n.osdResumedAt(
             ResumePlaybackPolicy.formatHms(Duration(milliseconds: ms)),
@@ -3660,12 +4066,26 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
 
   Future<void> _advancePlaylist(int delta) async {
     if (_playlist.isEmpty) return;
-    final wrap = PlaylistAdvancePolicy.shouldWrapQueue(_settings.loopMode);
-    final next = _playlist.advance(delta, wrap: wrap);
-    if (next == null) return;
-    final l10n = AppLocalizations.of(context);
-    _showOsdMessage(delta > 0 ? l10n.osdNextInQueue : l10n.osdPreviousInQueue);
-    await _loadSource(next, syncPlaylist: false);
+    await _playback.loadQueue.enqueue(
+      () async {
+        if (_isDisposed || _playlist.isEmpty) return;
+        final wrap = PlaylistAdvancePolicy.shouldWrapQueue(_settings.loopMode);
+        final next = _playlist.advance(delta, wrap: wrap);
+        if (next == null) return;
+        final l10n = AppLocalizations.of(context);
+        _showOsdMessage(
+          delta > 0 ? l10n.osdNextInQueue : l10n.osdPreviousInQueue,
+        );
+        await _loadSourceInternal(next, syncPlaylist: false);
+      },
+      onError: (Object e, StackTrace st) {
+        _log(
+          'load_queue_failed',
+          message: e.toString(),
+          severity: DebugSeverity.warn,
+        );
+      },
+    );
   }
 
   void _enqueue(List<String> paths, {bool playNow = false}) {
@@ -3718,6 +4138,36 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
             ),
           );
         }
+    }
+  }
+
+  Future<void> _confirmClearQueue() async {
+    if (_playlist.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final dialogL10n = AppLocalizations.of(ctx);
+        return AlertDialog(
+          title: Text(dialogL10n.dialogClearQueueTitle),
+          content: Text(dialogL10n.dialogClearQueueBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(dialogL10n.actionCancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(dialogL10n.actionClear),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+    final wasPlaying = _currentFile != null;
+    _playlist.clear();
+    if (wasPlaying) {
+      await _stopPlaybackAndResetUi();
     }
   }
 
@@ -3781,6 +4231,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
           severity: DebugSeverity.warn,
         );
       }
+      if (!mounted || _isDisposed) return;
       setState(() => _compactMode = false);
       _showOsdMessage(l10n.osdMiniPlayerOff);
     } else {
@@ -3808,6 +4259,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
           severity: DebugSeverity.warn,
         );
       }
+      if (!mounted || _isDisposed) return;
       setState(() => _compactMode = true);
       _showOsdMessage(l10n.osdMiniPlayerOn);
     }
@@ -4177,6 +4629,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
                           ),
                           const Divider(height: 1),
                           if (hasAudioOptions &&
+                              PlaybackMixPolicy.userFacingEnabled &&
                               _settings.experimentalFeaturesEnabled)
                             switchItem(
                               icon: Icons.multitrack_audio,
@@ -4186,18 +4639,6 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
                               onChanged: (v) {
                                 _settings.multiAudioMix = v;
                                 setSheetState(() {});
-                                unawaited(() async {
-                                  final applied = await _applyMultiAudioMix(
-                                    announce: true,
-                                  );
-                                  // Reload when disabling, or when enable
-                                  // succeeded. Skip reload after a failed
-                                  // enable (toggle already reverted).
-                                  if (_currentFile != null && (!v || applied)) {
-                                    await _reloadCurrentForMixChange();
-                                  }
-                                  if (mounted) setSheetState(() {});
-                                }());
                               },
                             ),
                           item(
@@ -4323,11 +4764,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
       final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: PlayerPathUtils.audioExtensions.toList()..sort(),
-        lockParentWindow: true,
+        windowsOptions: _filePickerWindowsOptions,
+        linuxOptions: _filePickerLinuxOptions,
         initialDirectory: _settings.lastOpenDirectory,
       );
-      final path = file?.path?.trim();
-      if (path == null || path.isEmpty) return;
+      final path = FilePickerPath.fromPlatformFilePath(file?.path);
+      if (path == null) return;
+      await _captureBookmarkFor(path);
       final ok = await _playerService.addExternalAudio(path);
       if (!mounted) return;
       _showOsdMessage(
@@ -4370,11 +4813,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
           'idx',
           'sup',
         ],
-        lockParentWindow: true,
+        windowsOptions: _filePickerWindowsOptions,
+        linuxOptions: _filePickerLinuxOptions,
         initialDirectory: _settings.lastOpenDirectory,
       );
-      final path = file?.path?.trim();
-      if (path == null || path.isEmpty) return;
+      final path = FilePickerPath.fromPlatformFilePath(file?.path);
+      if (path == null) return;
+      await _captureBookmarkFor(path);
       final ok = await _playerService.addExternalSubtitle(path);
       if (!mounted) return;
       _showOsdMessage(
@@ -4442,7 +4887,18 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     );
     if (selected != null) {
       await _disableMixForManualTrackSelection();
-      await _playerService.setAudioTrack(selected);
+      final ok = await _playerService.setAudioTrack(selected);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                context,
+              ).snackPlaybackOperationFailed(selected.id),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -4657,13 +5113,19 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
 
   Future<void> _pickFilesToEnqueue() async {
     try {
-      final result = await FilePicker.pickFiles(type: FileType.media);
-      if (result == null) return;
-      final paths = result.paths
+      final files = await FilePicker.pickFiles(
+        type: FileType.media,
+        windowsOptions: _filePickerWindowsOptions,
+        linuxOptions: _filePickerLinuxOptions,
+      );
+      final paths = files
+          .map((file) => FilePickerPath.fromPlatformFilePath(file.path))
           .whereType<String>()
-          .where((s) => s.trim().isNotEmpty)
           .toList(growable: false);
       if (paths.isEmpty) return;
+      for (final path in paths) {
+        await _captureBookmarkFor(path);
+      }
       _enqueue(paths);
     } catch (e) {
       _log(
@@ -4779,65 +5241,74 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   Future<String?> _captureKeybind(BuildContext context) async {
     final node = FocusNode();
     String? captured;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          final l10n = AppLocalizations.of(ctx);
-          return AlertDialog(
-            title: Text(l10n.dialogKeyCaptureTitle),
-            content: SizedBox(
-              width: _dialogWidth(ctx, 320),
-              child: Focus(
-                autofocus: true,
-                focusNode: node,
-                onKeyEvent: (n, e) {
-                  if (e is! KeyDownEvent) {
+    var saved = false;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setLocal) {
+            final l10n = AppLocalizations.of(ctx);
+            return AlertDialog(
+              title: Text(l10n.dialogKeyCaptureTitle),
+              content: SizedBox(
+                width: _dialogWidth(ctx, 320),
+                child: Focus(
+                  autofocus: true,
+                  focusNode: node,
+                  onKeyEvent: (n, e) {
+                    if (e is! KeyDownEvent) {
+                      return KeyEventResult.ignored;
+                    }
+                    if (e.logicalKey == LogicalKeyboardKey.escape) {
+                      Navigator.pop(ctx);
+                      return KeyEventResult.handled;
+                    }
+                    if (e.logicalKey != LogicalKeyboardKey.controlLeft &&
+                        e.logicalKey != LogicalKeyboardKey.controlRight &&
+                        e.logicalKey != LogicalKeyboardKey.shiftLeft &&
+                        e.logicalKey != LogicalKeyboardKey.shiftRight &&
+                        e.logicalKey != LogicalKeyboardKey.altLeft &&
+                        e.logicalKey != LogicalKeyboardKey.altRight &&
+                        e.logicalKey != LogicalKeyboardKey.metaLeft &&
+                        e.logicalKey != LogicalKeyboardKey.metaRight) {
+                      captured = PlayerShortcutsService.acceleratorFromEvent(e);
+                      setLocal(() {});
+                      return KeyEventResult.handled;
+                    }
                     return KeyEventResult.ignored;
-                  }
-                  if (e.logicalKey == LogicalKeyboardKey.escape) {
-                    Navigator.pop(ctx);
-                    return KeyEventResult.handled;
-                  }
-                  if (e.logicalKey != LogicalKeyboardKey.controlLeft &&
-                      e.logicalKey != LogicalKeyboardKey.controlRight &&
-                      e.logicalKey != LogicalKeyboardKey.shiftLeft &&
-                      e.logicalKey != LogicalKeyboardKey.shiftRight &&
-                      e.logicalKey != LogicalKeyboardKey.altLeft &&
-                      e.logicalKey != LogicalKeyboardKey.altRight &&
-                      e.logicalKey != LogicalKeyboardKey.metaLeft &&
-                      e.logicalKey != LogicalKeyboardKey.metaRight) {
-                    captured = PlayerShortcutsService.acceleratorFromEvent(e);
-                    setLocal(() {});
-                    return KeyEventResult.handled;
-                  }
-                  return KeyEventResult.ignored;
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  alignment: Alignment.center,
-                  child: Text(
-                    captured ?? l10n.keyCaptureWaiting,
-                    style: Theme.of(ctx).textTheme.titleMedium,
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    alignment: Alignment.center,
+                    child: Text(
+                      captured ?? l10n.keyCaptureWaiting,
+                      style: Theme.of(ctx).textTheme.titleMedium,
+                    ),
                   ),
                 ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(l10n.actionCancel),
-              ),
-              TextButton(
-                onPressed: captured == null ? null : () => Navigator.pop(ctx),
-                child: Text(l10n.actionSave),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-    node.dispose();
-    return captured;
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(l10n.actionCancel),
+                ),
+                TextButton(
+                  onPressed: captured == null
+                      ? null
+                      : () {
+                          saved = true;
+                          Navigator.pop(ctx);
+                        },
+                  child: Text(l10n.actionSave),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      node.dispose();
+    }
+    return saved ? captured : null;
   }
 }

@@ -1,5 +1,14 @@
 /// Builds mpv `lavfi-complex` graphs for experimental multi-audio mix.
+///
+/// Mix is withdrawn from the UI (`userFacingEnabled` is false). Keep the
+/// graph builder, PlayerScreen apply path, and stored pref. Flip this flag
+/// and restore the Settings / ⋯ menu tiles when a linked libmpv has
+/// `amix`/`aformat` on every shipped platform. See `docs/ideas/multi-audio-mix.md`.
 abstract final class PlaybackMixPolicy {
+  /// When false, Settings and the player menu must not offer mix, and
+  /// [SettingsService.multiAudioMix] reports false even if a pref is stored.
+  static const bool userFacingEnabled = false;
+
   /// Audio-only branch: format each [aidN] track and amix into [ao].
   static String buildAudioMixBranch(List<String> audioIds) {
     final buf = StringBuffer();
@@ -40,6 +49,17 @@ abstract final class PlaybackMixPolicy {
       .where((id) => id != 'auto' && id != 'no')
       .where((id) => int.tryParse(id) != null)
       .toList(growable: false);
+
+  /// First real movie video id, skipping embedded cover/album-art tracks.
+  static String? passthroughVideoTrackId({
+    required Iterable<String> videoIds,
+    required bool Function(String id) isAlbumArtOrImage,
+  }) {
+    for (final id in numericVideoIds(videoIds)) {
+      if (!isAlbumArtOrImage(id)) return id;
+    }
+    return null;
+  }
 }
 
 /// Tracks per-load mix cache state so IDs from one file cannot leak into the

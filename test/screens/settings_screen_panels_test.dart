@@ -150,10 +150,10 @@ void main() {
       final svc = await _services();
       await tester.pumpWidget(_wrap(svc.settings, svc.debugLog));
       await tester.pumpAndSettle();
-      expect(find.text('Mix all audio tracks'), findsNothing);
+      expect(find.text('Mix all audio tracks (Experimental)'), findsNothing);
     });
 
-    testWidgets('experimental panels appear after toggling experiments on', (
+    testWidgets('multi-audio mix stays hidden when experiments are on', (
       tester,
     ) async {
       final svc = await _services(
@@ -161,8 +161,9 @@ void main() {
       );
       await tester.pumpWidget(_wrap(svc.settings, svc.debugLog));
       await tester.pumpAndSettle();
-      await _scrollTo(tester, find.text('Mix all audio tracks'));
-      expect(find.text('Mix all audio tracks'), findsOneWidget);
+      await _scrollTo(tester, find.text('Enable Experimental Features'));
+      expect(find.text('Enable Experimental Features'), findsOneWidget);
+      expect(find.text('Mix all audio tracks (Experimental)'), findsNothing);
     });
   });
 }

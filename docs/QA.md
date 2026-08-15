@@ -34,6 +34,12 @@ Tick items as you go before a stable cut. Fix failures as they surface rather th
 - [ ] Windows: Jump List recents + taskbar progress while playing
 - [ ] macOS: File menu + Dock menu New Window / Open; Open Recent → Clear Menu
 - [ ] Linux AppImage: Check for Updates mentions AppManager and/or replacing the AppImage; deb/rpm shows package guidance (not “portable”)
+- [ ] Linux AppImage/tar/Flatpak play a local file **without** installing distro libmpv. deb/rpm still need the distro package.
+- [ ] Windows: second launch with no file restores the existing window (does not spawn a second instance). Open With / file argument while tray-hidden also restores and focuses.
+- [ ] macOS: Dock click restores a tray-hidden window
+- [ ] Fullscreen: chrome + cursor auto-hide; mouse/key reveals; click pauses; scroll changes volume
+- [ ] Clear queue asks for confirmation; confirming stops playback if something is playing
+- [ ] Linux MPRIS: lock-screen scrubber does not jitter from Seeked spam while playing
 - [ ] Minimize to tray (Appearance, off by default): close hides; tray icon is visible on Windows and macOS; tray Show restores; tray Quit exits
 
 ## Settings / updates
@@ -48,8 +54,7 @@ Tick items as you go before a stable cut. Fix failures as they surface rather th
 - [ ] Turning **Experimental off** on Win/mac does **not** clear Appearance blur / opacity
 - [ ] Hardware decode change applies without requiring app restart (copy matches behavior)
 - [ ] Settings → Keyboard shortcuts opens the full editable F1 keybinds dialog
-- [ ] Experimental section: multi-audio mix (and Linux blur) appear when master is on (WIP lane; expected unstable)
-- [ ] Experimental mix: when enable fails, OSD/snack explains it and the toggle turns back off
+- [ ] Experimental section: Linux compositor blur appears when master is on (WIP lane; expected unstable). Multi-audio mix must **not** appear.
 - [ ] Seek thumbnails toggle lives under Playback settings (not the more menu)
 - [ ] Check for Updates opens a sensible path (self-update on Win MSI / macOS Applications; Linux package guidance)
 - [ ] Windows MSI self-update burn-in: `dacx-update-helper.exe` next to `dacx.exe`; after Apply, no `.ps1` under `%LOCALAPPDATA%\Dacx\updates`; `helper.log` shows wait → sha256 → msiexec → `relaunched …\dacx.exe`; app returns like macOS update & restart

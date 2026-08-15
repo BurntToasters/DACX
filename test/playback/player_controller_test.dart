@@ -98,7 +98,7 @@ void main() {
             video: [
               VideoTrack.auto(),
               VideoTrack.no(),
-              VideoTrack('art', 'cover', null, image: true),
+              const VideoTrack('art', 'cover', null, image: true),
             ],
           ),
         )?.id,

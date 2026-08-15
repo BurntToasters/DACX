@@ -71,7 +71,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsHardwareAccelerationRestartNote =>
-      'Applies immediately to the player; a new file open picks up VideoController changes';
+      'Applies on the next file you open';
 
   @override
   String get settingsPlaybackSpeed => 'Playback speed';
@@ -93,7 +93,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsMultiAudioMixSubtitle =>
-      'Play every audio track at once (Experimental)';
+      'Experimental. Needs amix/aformat in the linked libmpv; often unavailable on Windows/macOS.';
 
   @override
   String get settingsSeekPreview => 'Seek thumbnails';
@@ -104,11 +104,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsExperimentalStoredPrefsHint =>
-      'Stored experimental options (mix, Linux compositor blur) turn back on when you re-enable this';
+      'Stored experimental options (Linux compositor blur) turn back on when you re-enable this';
 
   @override
   String get snackDropPathInaccessible =>
       'Some dropped files are outside the sandbox or inaccessible';
+
+  @override
+  String get missingLibmpvTitle => 'Playback engine not found';
+
+  @override
+  String get missingLibmpvBody =>
+      'Dacx needs libmpv. Official AppImage, tar, and Flatpak builds bundle it — this screen means that copy is missing or unloadable. For deb/rpm or a source build, install your distro package (Debian/Ubuntu: libmpv2, Fedora: mpv-libs, Arch: mpv) and launch again.';
+
+  @override
+  String get missingLibmpvQuit => 'Quit';
+
+  @override
+  String osdVolume(int value) {
+    return 'Volume $value%';
+  }
+
+  @override
+  String get osdMuted => 'Muted';
 
   @override
   String get snackScreenshotDirInaccessible =>
@@ -231,6 +249,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsBlurIntensityMac =>
       'Adjusts native glass material intensity';
+
+  @override
+  String get settingsBlurIntensityLinux =>
+      'Adjusts compositor blur intensity when experimental Linux blur is on';
 
   @override
   String get settingsLinuxCompositorBlur =>
@@ -621,7 +643,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuLoadExternalSubtitle => 'Load external subtitle…';
 
   @override
-  String get menuMixAllAudioTracks => 'Mix all audio tracks';
+  String get menuMixAllAudioTracks => 'Mix all audio tracks (Experimental)';
 
   @override
   String get menuSleepTimer => 'Sleep timer';
@@ -784,6 +806,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get actionClear => 'Clear';
+
+  @override
+  String get dialogClearQueueTitle => 'Clear play queue?';
+
+  @override
+  String get dialogClearQueueBody =>
+      'This removes every queued item. Playing media will stop.';
 
   @override
   String get actionCancel => 'Cancel';

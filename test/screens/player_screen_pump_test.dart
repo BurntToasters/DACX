@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -784,10 +783,10 @@ void main() {
 
     player.emitTracks(tracks);
     player.emitTrack(
-      Track(
-        audio: const AudioTrack('eng', 'English', null),
-        video: const VideoTrack('auto', 'auto', null),
-        subtitle: const SubtitleTrack('eng', 'English', null),
+      const Track(
+        audio: AudioTrack('eng', 'English', null),
+        video: VideoTrack('auto', 'auto', null),
+        subtitle: SubtitleTrack('eng', 'English', null),
       ),
     );
     await tester.pump();
@@ -1267,7 +1266,7 @@ void main() {
     PlayerScreenHarness.configureDesktopViewport(tester);
     final services = await PlayerScreenHarness.createServices();
     final player = HeadlessPlayerService()
-      ..failProperties(const ['audio-files-add']);
+      ..failProperties(const ['audio-files-append']);
     PlayerScreenHarness.filePickerPaths = ['/media/extra.flac'];
 
     await tester.pumpWidget(
@@ -1747,8 +1746,7 @@ void main() {
 
     expect(
       PlayerScreenHarness.windowMethodsCalls.map((c) => c.method),
-      contains('openNewWindow'),
-      skip: Platform.isMacOS ? false : 'macOS uses in-process window bridge',
+      isNot(contains('openNewWindow')),
     );
   });
 
@@ -2488,15 +2486,14 @@ void main() {
     await mediaCommands.close();
   });
 
-  testWidgets('failed audio mix reverts toggle and shows feedback', (
+  testWidgets('multi-audio mix is not offered in the more menu', (
     tester,
   ) async {
     PlayerScreenHarness.configureDesktopViewport(tester);
     final services = await PlayerScreenHarness.createServices(
-      prefs: {'experimental_features_enabled': true},
+      prefs: {'experimental_features_enabled': true, 'multi_audio_mix': true},
     );
-    final player = HeadlessPlayerService()
-      ..failProperties(const ['lavfi-complex']);
+    final player = HeadlessPlayerService();
 
     await tester.pumpWidget(
       PlayerScreenHarness.wrap(
@@ -2525,16 +2522,8 @@ void main() {
 
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Mix all audio tracks'));
-    await tester.pumpAndSettle();
 
+    expect(find.text('Mix all audio tracks (Experimental)'), findsNothing);
     expect(services.settings.multiAudioMix, isFalse);
-    expect(find.text('Could not enable audio mix'), findsWidgets);
-    expect(
-      player.propertyCalls.where(
-        (call) => call.name == 'lavfi-complex' && call.value.isNotEmpty,
-      ),
-      isNotEmpty,
-    );
   });
 }

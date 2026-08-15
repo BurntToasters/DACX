@@ -151,5 +151,24 @@ void main() {
       );
       expect(high.rate, 4.0);
     });
+
+    test('maps raise and quit', () {
+      expect(
+        MediaSessionCommandDispatch.resolve(
+          const MediaSessionCommand('raise', null),
+          position: Duration.zero,
+          duration: Duration.zero,
+        ).kind,
+        MediaSessionDispatchKind.raise,
+      );
+      expect(
+        MediaSessionCommandDispatch.resolve(
+          const MediaSessionCommand('quit', null),
+          position: Duration.zero,
+          duration: Duration.zero,
+        ).kind,
+        MediaSessionDispatchKind.quit,
+      );
+    });
   });
 }

@@ -77,7 +77,7 @@ void main() {
           const OsdOverlay(
             title: 'Track',
             position: Duration.zero,
-            duration: const Duration(minutes: 1),
+            duration: Duration(minutes: 1),
             visible: true,
             transientMessage: 'Screenshot saved',
           ),

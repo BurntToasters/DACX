@@ -217,7 +217,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsHardwareAccelerationRestartNote.
   ///
   /// In en, this message translates to:
-  /// **'Applies immediately to the player; a new file open picks up VideoController changes'**
+  /// **'Applies on the next file you open'**
   String get settingsHardwareAccelerationRestartNote;
 
   /// No description provided for @settingsPlaybackSpeed.
@@ -253,7 +253,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsMultiAudioMixSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Play every audio track at once (Experimental)'**
+  /// **'Experimental. Needs amix/aformat in the linked libmpv; often unavailable on Windows/macOS.'**
   String get settingsMultiAudioMixSubtitle;
 
   /// No description provided for @settingsSeekPreview.
@@ -271,7 +271,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsExperimentalStoredPrefsHint.
   ///
   /// In en, this message translates to:
-  /// **'Stored experimental options (mix, Linux compositor blur) turn back on when you re-enable this'**
+  /// **'Stored experimental options (Linux compositor blur) turn back on when you re-enable this'**
   String get settingsExperimentalStoredPrefsHint;
 
   /// No description provided for @snackDropPathInaccessible.
@@ -279,6 +279,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Some dropped files are outside the sandbox or inaccessible'**
   String get snackDropPathInaccessible;
+
+  /// No description provided for @missingLibmpvTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback engine not found'**
+  String get missingLibmpvTitle;
+
+  /// No description provided for @missingLibmpvBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Dacx needs libmpv. Official AppImage, tar, and Flatpak builds bundle it — this screen means that copy is missing or unloadable. For deb/rpm or a source build, install your distro package (Debian/Ubuntu: libmpv2, Fedora: mpv-libs, Arch: mpv) and launch again.'**
+  String get missingLibmpvBody;
+
+  /// No description provided for @missingLibmpvQuit.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit'**
+  String get missingLibmpvQuit;
+
+  /// No description provided for @osdVolume.
+  ///
+  /// In en, this message translates to:
+  /// **'Volume {value}%'**
+  String osdVolume(int value);
+
+  /// No description provided for @osdMuted.
+  ///
+  /// In en, this message translates to:
+  /// **'Muted'**
+  String get osdMuted;
 
   /// No description provided for @snackScreenshotDirInaccessible.
   ///
@@ -495,6 +525,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Adjusts native glass material intensity'**
   String get settingsBlurIntensityMac;
+
+  /// No description provided for @settingsBlurIntensityLinux.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusts compositor blur intensity when experimental Linux blur is on'**
+  String get settingsBlurIntensityLinux;
 
   /// No description provided for @settingsLinuxCompositorBlur.
   ///
@@ -1165,7 +1201,7 @@ abstract class AppLocalizations {
   /// No description provided for @menuMixAllAudioTracks.
   ///
   /// In en, this message translates to:
-  /// **'Mix all audio tracks'**
+  /// **'Mix all audio tracks (Experimental)'**
   String get menuMixAllAudioTracks;
 
   /// No description provided for @menuSleepTimer.
@@ -1449,6 +1485,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear'**
   String get actionClear;
+
+  /// No description provided for @dialogClearQueueTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear play queue?'**
+  String get dialogClearQueueTitle;
+
+  /// No description provided for @dialogClearQueueBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes every queued item. Playing media will stop.'**
+  String get dialogClearQueueBody;
 
   /// No description provided for @actionCancel.
   ///

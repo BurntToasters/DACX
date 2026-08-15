@@ -16,20 +16,35 @@ Refresh the CA bundle from [curl.se’s CA extract](https://curl.se/docs/caextra
 
 ## Linux packaging notes
 
+`media_kit_video` **links** libmpv (`DT_NEEDED`). Official **AppImage, tar, and
+Flatpak** builds copy `libmpv.so.2` and its non-system DT_NEEDED deps (FFmpeg
+libs, libass, ayatana, …) into `bundle/lib` and set `$ORIGIN` RPATH so the
+loader finds them without a host SONAME. **deb / rpm** do **not** vendor those
+libs; they declare Depends/`Requires` on distro `libmpv2` / `mpv-libs` and
+ayatana. GTK, glibc, and GPU/audio server libraries stay on the host (or the
+Flatpak runtime). `flutter run` / unpackaged bundles still need host libmpv.
+
+If a portable artifact is missing its vendored copy, the process can still
+abort in the dynamic loader before Dart. The in-app “Playback engine not found”
+screen appears when the process starts and `MediaKit.ensureInitialized` fails.
+
 | Package | libmpv | Tray (appindicator) |
 | ------- | ------ | ------------------- |
-| **AppImage / Flatpak** | Bundled with the Flutter release tree via `media_kit_libs_linux` (see `LD_LIBRARY_PATH` in the Flatpak launcher) | Bundled / linked from the build host where possible; tray still needs a StatusNotifier/AppIndicator host |
-| **deb / rpm** | System package (`libmpv2` / `mpv-libs`) | Runtime Depends/`Requires` on ayatana/appindicator shared libraries |
+| **AppImage / tar.gz** | **Bundled** into `bundle/lib` (`libmpv.so.2` + playback deps) | **Bundled** ayatana (and its non-GTK deps) when the plugin links it |
+| **Flatpak** | **Bundled** into `/app/lib/dacx/lib` (same vendor pass as AppImage/tar) | Same vendored ayatana; `--talk-name=org.kde.StatusNotifierWatcher` |
+| **deb / rpm** | Declared Depends/`Requires` on `libmpv2` / `mpv-libs` | Runtime Depends/`Requires` on ayatana/appindicator shared libraries |
 
 ### Building from source (apt)
 
-`npm run setup` (Linux) and CI install `libmpv-dev` and
-`libayatana-appindicator3-dev` so `tray_manager` can compile against AppIndicator.
+`npm run setup` (Linux) and CI install `libmpv-dev`,
+`libayatana-appindicator3-dev`, and `patchelf` so plugins link and portable
+packages can vendor the SONAMEs. That is why CI never sees a missing-SONAME
+launch failure for unpackaged `flutter test` builds.
 
 Linux **Flatpak** builds use the Freedesktop Platform/SDK runtimes (GTK, Mesa,
-PulseAudio/PipeWire, etc.) from Flathub for the sandbox; they do **not** pull
-libmpv from Flathub as a separate module. Playback libraries come from the
-copied Flutter bundle. Flatpak is GitHub sideload only (not published on Flathub).
+PulseAudio/PipeWire, etc.) from Flathub for the sandbox, plus the vendored
+libmpv tree from the Linux bundle. Flatpak is GitHub sideload only (not
+published on Flathub).
 
 Windows/macOS **release bundles** include the Flutter engine and media_kit
 prebuilt libraries produced by `flutter build`. Exact versions match the pinned

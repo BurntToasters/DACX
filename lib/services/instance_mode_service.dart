@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 class InstanceModeService {
@@ -39,12 +38,11 @@ class InstanceModeService {
   /// Native → Flutter: macOS File → Open Recent item (path argument).
   static const openRecentMethod = 'openRecent';
 
+  /// Native → Flutter: macOS File → New Window.
+  static const newWindowMethod = 'newWindow';
+
   /// Native → Flutter: request recent paths to rebuild Open Recent submenu.
   static const getRecentFilesMethod = 'getRecentFiles';
-
-  static const MethodChannel _windowMethodChannel = MethodChannel(
-    windowMethodChannelName,
-  );
 
   static String? _cachedFlagDir;
   static String? _flagDirOverride;
@@ -126,34 +124,13 @@ class InstanceModeService {
       }
       return spawnNewInstance();
     }
-    if (Platform.isWindows || Platform.isLinux) {
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       if (kDebugMode) {
         debugPrint(
           'Dacx: openNewWindow → spawnNewInstance (separate process on ${Platform.operatingSystem})',
         );
       }
       return spawnNewInstance();
-    }
-    if (Platform.isMacOS) {
-      try {
-        final opened = await _windowMethodChannel.invokeMethod<bool>(
-          'openNewWindow',
-        );
-        if (opened == true) {
-          if (kDebugMode) {
-            debugPrint('Dacx: openNewWindow → in-process native bridge');
-          }
-          return true;
-        }
-      } on MissingPluginException catch (e) {
-        if (kDebugMode) {
-          debugPrint('Dacx: native openNewWindow bridge missing: $e');
-        }
-      } on PlatformException catch (e) {
-        if (kDebugMode) {
-          debugPrint('Dacx: native openNewWindow failed: $e');
-        }
-      }
     }
     if (kDebugMode) {
       debugPrint('Dacx: openNewWindow → spawnNewInstance (fallback)');

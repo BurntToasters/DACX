@@ -3,6 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('PlaybackMixPolicy', () {
+    test(
+      'user-facing mix stays withdrawn until the linked FFmpeg can run it',
+      () {
+        expect(PlaybackMixPolicy.userFacingEnabled, isFalse);
+      },
+    );
+
     group('numericAudioIds', () {
       test('filters out auto and no', () {
         final ids = PlaybackMixPolicy.numericAudioIds(['auto', '1', '2', 'no']);
@@ -89,6 +96,18 @@ void main() {
           videoTrackId: '',
         );
         expect(graph, isNot(contains('[vo]')));
+      });
+    });
+
+    group('passthroughVideoTrackId', () {
+      test('skips album-art ids', () {
+        expect(
+          PlaybackMixPolicy.passthroughVideoTrackId(
+            videoIds: ['auto', '1', '2'],
+            isAlbumArtOrImage: (id) => id == '1',
+          ),
+          '2',
+        );
       });
     });
   });

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -50,6 +50,7 @@ abstract final class PlayerScreenHarness {
     'miguelruivo.flutter.plugins.filepicker',
   );
   static const bookmarkChannel = MethodChannel('run.rosie.dacx/bookmarks');
+  static FilePickerPlatform? _previousFilePicker;
 
   /// When non-null, [FilePicker.pickFile] returns the first path. Empty list = cancel.
   static List<String>? filePickerPaths;
@@ -86,6 +87,8 @@ abstract final class PlayerScreenHarness {
     windowMethodsCalls.clear();
     filePickerPaths = null;
     filePickerSavePath = null;
+    _previousFilePicker = FilePickerPlatform.instance;
+    FilePickerPlatform.instance = _HarnessFilePicker();
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
@@ -214,6 +217,11 @@ abstract final class PlayerScreenHarness {
     messenger.setMockMethodCallHandler(openFileMethodsChannel, null);
     messenger.setMockMethodCallHandler(filePickerChannel, null);
     messenger.setMockMethodCallHandler(bookmarkChannel, null);
+    final previous = _previousFilePicker;
+    if (previous != null) {
+      FilePickerPlatform.instance = previous;
+      _previousFilePicker = null;
+    }
   }
 
   static Widget wrap({
@@ -265,5 +273,97 @@ abstract final class PlayerScreenHarness {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+  }
+}
+
+base class _HarnessPlatformFile extends PlatformFile {
+  _HarnessPlatformFile(String path)
+    : name = path.split(RegExp(r'[/\\]')).last,
+      uri = Uri.file(path);
+
+  @override
+  final String name;
+
+  @override
+  final Uri uri;
+
+  @override
+  get xFile => throw UnimplementedError();
+
+  @override
+  Future<int> length() async => 0;
+
+  @override
+  Future<Uint8List> readAsBytes() async => Uint8List(0);
+
+  @override
+  Stream<Uint8List> readAsByteStream() => const Stream.empty();
+}
+
+final class _HarnessFilePicker extends FilePickerPlatform {
+  @override
+  Future<PlatformFile?> pickFile({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    int compressionQuality = 0,
+    AndroidOptions androidOptions = const AndroidOptions(),
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
+  }) async {
+    final paths = PlayerScreenHarness.filePickerPaths;
+    if (paths == null || paths.isEmpty) return null;
+    return _HarnessPlatformFile(paths.first);
+  }
+
+  @override
+  Future<List<PlatformFile>> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    int compressionQuality = 0,
+    AndroidOptions androidOptions = const AndroidOptions(),
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
+  }) async {
+    final paths = PlayerScreenHarness.filePickerPaths;
+    if (paths == null || paths.isEmpty) return const [];
+    return [for (final path in paths) _HarnessPlatformFile(path)];
+  }
+
+  @override
+  Future<String?> getDirectoryPath({
+    String? dialogTitle,
+    String? initialDirectory,
+    AndroidOptions androidOptions = const AndroidOptions(),
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Uri?> saveFile({
+    required String fileName,
+    required Uint8List bytes,
+    required String mimeType,
+    String? dialogTitle,
+    String? initialDirectory,
+    Function(FilePickerStatus)? onFileSaving,
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
+  }) async {
+    final path = PlayerScreenHarness.filePickerSavePath;
+    if (path == null || path.isEmpty) return null;
+    File(path).writeAsBytesSync(bytes);
+    return Uri.file(path);
   }
 }

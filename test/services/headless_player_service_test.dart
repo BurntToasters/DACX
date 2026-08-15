@@ -34,7 +34,7 @@ void main() {
 
     test('emitTracks updates currentTracks snapshot', () async {
       final service = HeadlessPlayerService();
-      final tracks = const Tracks(
+      const tracks = Tracks(
         audio: [AudioTrack('1', 'eng', null)],
         video: [],
         subtitle: [],

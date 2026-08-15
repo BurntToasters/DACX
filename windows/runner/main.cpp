@@ -38,7 +38,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   if (!force_new_instance && !allow_multi) {
     if (!dacx::AcquireSingletonMutex()) {
-      // Another Dacx is already running: forward any file paths and exit.
+      // Another Dacx is already running: forward paths (or an activate
+      // sentinel) and exit. Never create a second window.
       std::vector<std::string> file_paths;
       for (const auto& arg : command_line_arguments) {
         if (!arg.empty() && arg[0] != '-') {
@@ -46,24 +47,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
         }
       }
       if (file_paths.empty()) {
-        ::CoUninitialize();
-        return EXIT_SUCCESS;
+        file_paths.emplace_back("__DACX_ACTIVATE__");
       }
       bool forwarded = false;
-      for (int attempt = 0; attempt < 10 && !forwarded; ++attempt) {
+      for (int attempt = 0; attempt < 30 && !forwarded; ++attempt) {
         forwarded = dacx::ForwardToRunningInstance(file_paths);
         if (!forwarded) {
           ::Sleep(150);
         }
       }
-      if (forwarded) {
-        ::CoUninitialize();
-        return EXIT_SUCCESS;
-      }
-      // Pipe server may not be ready yet despite singleton mutex ownership.
-      // Continue startup so file-open requests are not dropped.
-      ::OutputDebugStringW(
-          L"[Dacx] ForwardToRunningInstance unavailable; continuing with new window.\n");
+      ::CoUninitialize();
+      return EXIT_SUCCESS;
     }
   }
 

@@ -48,4 +48,4 @@ See [SECURITY.md](SECURITY.md) for reporting vulnerabilities privately.
 
 ## Release builds (maintainers)
 
-Release scripts (`release:*`, `b`, `r`) are **intentionally destructive** on the release machine (hard reset/clean). Run only on dedicated release VMs with a complete `.env`. See README and SECURITY.md for signing and `DACX_REQUIRE_WINDOWS_SIGNER`.
+Release scripts (`release:*`, `b`, `r`) are **intentionally destructive** on the release machine (hard reset/clean). Run only on dedicated release VMs with a complete `.env`. See README and SECURITY.md for Azure Artifact Signing (`AZURE_*`) and `SKIP_WIN_CODESIGN=1` for unsigned local Windows builds.

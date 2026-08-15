@@ -85,6 +85,11 @@ class MediaSession {
     return instance;
   }
 
+  void SetWindow(HWND hwnd) {
+    hwnd_ = hwnd;
+    EnsureCommandWindow();
+  }
+
   void Attach(std::unique_ptr<MethodChannel> channel) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto* raw = channel.get();
@@ -163,9 +168,12 @@ class MediaSession {
  private:
   void EnsureInit() {
     if (smtc_) return;
-    HWND hwnd = ::GetActiveWindow();
+    HWND hwnd = hwnd_;
     if (!hwnd) {
-      ::OutputDebugStringW(L"[Dacx] SMTC init: no active window yet.\n");
+      hwnd = ::GetActiveWindow();
+    }
+    if (!hwnd) {
+      ::OutputDebugStringW(L"[Dacx] SMTC init: no window handle yet.\n");
       return;
     }
     auto interop = winrt::get_activation_factory<
@@ -323,6 +331,38 @@ class MediaSession {
     updater_.ClearAll();
     updater_.Update();
     smtc_.PlaybackStatus(MediaPlaybackStatus::Stopped);
+    last_duration_ms_ = 0;
+    last_position_ms_ = 0;
+  }
+
+  void QueueCommand(const EncodableMap& args) {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      pending_commands_.push_back(args);
+    }
+    EnsureCommandWindow();
+    if (command_hwnd_) {
+      PostMessageW(command_hwnd_, WM_DACX_SMTC_FLUSH, 0, 0);
+    }
+  }
+
+  void FlushCommands() {
+    std::vector<EncodableMap> drained;
+    MethodChannel* target = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      drained.swap(pending_commands_);
+      target = active_channel_;
+      if (target == nullptr && !channels_.empty()) {
+        target = channels_.back().get();
+      }
+    }
+    if (target == nullptr) return;
+    for (const auto& args : drained) {
+      target->InvokeMethod(
+          "command",
+          std::make_unique<EncodableValue>(EncodableValue(args)));
+    }
   }
 
   void DispatchButton(
@@ -337,32 +377,41 @@ class MediaSession {
       case B::Previous: action = "previous"; break;
       default: return;
     }
-    std::lock_guard<std::mutex> lock(mutex_);
-    MethodChannel* target = active_channel_;
-    if (target == nullptr && !channels_.empty()) {
-      target = channels_.back().get();
-    }
-    if (target == nullptr) return;
     EncodableMap args{{EncodableValue("action"), EncodableValue(action)}};
-    target->InvokeMethod(
-        "command",
-        std::make_unique<EncodableValue>(EncodableValue(args)));
+    QueueCommand(args);
   }
 
   void DispatchPosition(int positionMs) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    MethodChannel* target = active_channel_;
-    if (target == nullptr && !channels_.empty()) {
-      target = channels_.back().get();
-    }
-    if (target == nullptr) return;
     EncodableMap args{
         {EncodableValue("action"), EncodableValue("seek")},
         {EncodableValue("positionMs"), EncodableValue(positionMs)},
     };
-    target->InvokeMethod(
-        "command",
-        std::make_unique<EncodableValue>(EncodableValue(args)));
+    QueueCommand(args);
+  }
+
+  static constexpr UINT WM_DACX_SMTC_FLUSH = WM_USER + 0x61;
+
+  static LRESULT CALLBACK CommandWndProc(HWND hwnd, UINT msg, WPARAM wp,
+                                         LPARAM lp) {
+    if (msg == WM_DACX_SMTC_FLUSH) {
+      MediaSession::Get().FlushCommands();
+      return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+  }
+
+  void EnsureCommandWindow() {
+    if (command_hwnd_) return;
+    static const wchar_t* kClassName = L"DacxSmtcDispatchWindow";
+    WNDCLASSEXW wc{};
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = CommandWndProc;
+    wc.hInstance = GetModuleHandleW(nullptr);
+    wc.lpszClassName = kClassName;
+    RegisterClassExW(&wc);
+    command_hwnd_ = CreateWindowExW(0, kClassName, L"", 0, 0, 0, 0, 0,
+                                    HWND_MESSAGE, nullptr, wc.hInstance,
+                                    nullptr);
   }
 
   std::mutex mutex_;
@@ -376,6 +425,9 @@ class MediaSession {
   int64_t last_duration_ms_{0};
   int64_t last_position_ms_{0};
   double last_rate_{1.0};
+  HWND hwnd_{nullptr};
+  HWND command_hwnd_{nullptr};
+  std::vector<EncodableMap> pending_commands_;
 };
 
 }  // namespace
@@ -385,7 +437,8 @@ namespace {
   std::unordered_map<flutter::BinaryMessenger*, MethodChannel*> g_registered;
 }
 
-void RegisterMediaSession(flutter::BinaryMessenger* messenger) {
+void RegisterMediaSession(flutter::BinaryMessenger* messenger, HWND hwnd) {
+  MediaSession::Get().SetWindow(hwnd);
   auto channel = std::make_unique<MethodChannel>(
       messenger, "run.rosie.dacx/media_session",
       &flutter::StandardMethodCodec::GetInstance());

@@ -15,6 +15,8 @@ class PlayerSettingsSyncState {
     this.lastEqEnabled,
     this.lastEqBands,
     this.lastHwDec,
+    this.lastSeekPreviewEnabled,
+    this.lastOsdEnabled,
   });
 
   final double? lastSpeed;
@@ -26,6 +28,8 @@ class PlayerSettingsSyncState {
   final bool? lastEqEnabled;
   final List<double>? lastEqBands;
   final String? lastHwDec;
+  final bool? lastSeekPreviewEnabled;
+  final bool? lastOsdEnabled;
 
   PlayerSettingsSyncState copyWith({
     double? lastSpeed,
@@ -37,6 +41,8 @@ class PlayerSettingsSyncState {
     bool? lastEqEnabled,
     List<double>? lastEqBands,
     String? lastHwDec,
+    bool? lastSeekPreviewEnabled,
+    bool? lastOsdEnabled,
   }) {
     return PlayerSettingsSyncState(
       lastSpeed: lastSpeed ?? this.lastSpeed,
@@ -49,6 +55,9 @@ class PlayerSettingsSyncState {
       lastEqEnabled: lastEqEnabled ?? this.lastEqEnabled,
       lastEqBands: lastEqBands ?? this.lastEqBands,
       lastHwDec: lastHwDec ?? this.lastHwDec,
+      lastSeekPreviewEnabled:
+          lastSeekPreviewEnabled ?? this.lastSeekPreviewEnabled,
+      lastOsdEnabled: lastOsdEnabled ?? this.lastOsdEnabled,
     );
   }
 }
@@ -65,6 +74,8 @@ class PlayerSettingsSyncDelta {
     this.playlistShuffle,
     this.alwaysOnTop,
     this.hwDec,
+    this.seekPreviewEnabled,
+    this.osdEnabled,
     this.rebuildUi = false,
   });
 
@@ -76,6 +87,8 @@ class PlayerSettingsSyncDelta {
   final bool? playlistShuffle;
   final bool? alwaysOnTop;
   final String? hwDec;
+  final bool? seekPreviewEnabled;
+  final bool? osdEnabled;
   final bool rebuildUi;
 
   bool get isEmpty =>
@@ -87,6 +100,8 @@ class PlayerSettingsSyncDelta {
       playlistShuffle == null &&
       alwaysOnTop == null &&
       hwDec == null &&
+      seekPreviewEnabled == null &&
+      osdEnabled == null &&
       !rebuildUi;
 }
 
@@ -105,6 +120,8 @@ abstract final class PlayerSettingsSync {
     bool? playlistShuffle;
     bool? alwaysOnTop;
     String? hwDec;
+    bool? seekPreviewEnabled;
+    bool? osdEnabled;
 
     if (state.lastSpeed != settings.speed) {
       speed = settings.speed;
@@ -154,6 +171,16 @@ abstract final class PlayerSettingsSync {
       next = next.copyWith(lastHwDec: settings.hwDec);
     }
 
+    if (state.lastSeekPreviewEnabled != settings.seekPreviewEnabled) {
+      seekPreviewEnabled = settings.seekPreviewEnabled;
+      next = next.copyWith(lastSeekPreviewEnabled: settings.seekPreviewEnabled);
+    }
+
+    if (state.lastOsdEnabled != settings.osdEnabled) {
+      osdEnabled = settings.osdEnabled;
+      next = next.copyWith(lastOsdEnabled: settings.osdEnabled);
+    }
+
     final delta = PlayerSettingsSyncDelta(
       speed: speed,
       loopMode: loopMode,
@@ -163,6 +190,8 @@ abstract final class PlayerSettingsSync {
       playlistShuffle: playlistShuffle,
       alwaysOnTop: alwaysOnTop,
       hwDec: hwDec,
+      seekPreviewEnabled: seekPreviewEnabled,
+      osdEnabled: osdEnabled,
       rebuildUi:
           speed != null ||
           loopMode != null ||
@@ -171,7 +200,9 @@ abstract final class PlayerSettingsSync {
           mediaSessionEnabled != null ||
           playlistShuffle != null ||
           alwaysOnTop != null ||
-          hwDec != null,
+          hwDec != null ||
+          seekPreviewEnabled != null ||
+          osdEnabled != null,
     );
 
     return (delta, next);
