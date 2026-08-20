@@ -89,7 +89,7 @@
     <mediatype>application/pls+xml</mediatype>
   </provides>
   <releases>
-    <release version="0.11.2-beta.1" date="2026-08-15">
+    <release version="0.11.2-beta.1" date="2026-08-20">
       <description>
         <p>Bundle libmpv into AppImage, tar, and Flatpak; playback, singleton, and updater fixes.</p>
       </description>
