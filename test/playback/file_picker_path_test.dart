@@ -8,6 +8,10 @@ void main() {
         FilePickerPath.fromPlatformFilePath('  /tmp/a.mp3  '),
         '/tmp/a.mp3',
       );
+      expect(
+        FilePickerPath.fromPlatformFilePath(r'  C:\Media\a.mp3  '),
+        r'C:\Media\a.mp3',
+      );
     });
 
     test('returns null for missing paths', () {
@@ -18,10 +22,21 @@ void main() {
   });
 
   group('FilePickerPath.fromSaveUri', () {
-    test('converts file URIs to filesystem paths', () {
+    test('converts POSIX file URIs to filesystem paths', () {
       expect(
-        FilePickerPath.fromSaveUri(Uri.file('/tmp/playlist.m3u')),
+        FilePickerPath.fromSaveUri(
+          Uri.file('/tmp/playlist.m3u', windows: false),
+        ),
         '/tmp/playlist.m3u',
+      );
+    });
+
+    test('converts Windows file URIs to filesystem paths', () {
+      expect(
+        FilePickerPath.fromSaveUri(
+          Uri.file(r'C:\Users\dev\playlist.m3u', windows: true),
+        ),
+        r'C:\Users\dev\playlist.m3u',
       );
     });
 
