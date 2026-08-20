@@ -37,7 +37,7 @@
 - **Fix - macOS bookmarks / Dock:** Folder pick and drops capture bookmarks; Dock reopen shows a hidden window; `NSNumber` duration/position parsing; New Window spawns a process like Win/Linux.
 - **Fix - Linux portable libmpv:** AppImage, tar, and Flatpak **vendor `libmpv.so.2`** (plus non-system DT_NEEDED deps, including ayatana) into `bundle/lib` with `$ORIGIN` RPATH so they start without a host libmpv. deb/rpm still Depends/`Requires` distro `libmpv2` / `mpv-libs`. Desktop `StartupWMClass` matches `run.rosie.dacx`. Flatpak talks to StatusNotifierWatcher. MPRIS no longer emits Seeked every 400ms.
 - **Change - Multi-audio mix withdrawn from UI:** Settings and the ⋯ menu no longer offer mix. Implementation and stored pref stay; `PlaybackMixPolicy.userFacingEnabled` is the restore switch (`docs/ideas/multi-audio-mix.md`).
-- **Fix - file_picker 12.0:** Open/save/enqueue use `PlatformFile` / save `Uri` and platform lock options after the stable 12.0 API.
+- **Fix - file_picker 12.0:** Open/save/enqueue use `PlatformFile` / save `Uri` and platform lock options after the stable 12.0 API. Save URIs keep POSIX vs Windows path shape so Windows tests and `C:` paths round-trip.
 - **Docs:** One Windows signing story (Azure Artifact Signing + `SKIP_WIN_CODESIGN=1`).
 
 ## Changes in `v0.11.1:`

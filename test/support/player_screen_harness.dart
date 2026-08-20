@@ -277,9 +277,22 @@ abstract final class PlayerScreenHarness {
 }
 
 base class _HarnessPlatformFile extends PlatformFile {
-  _HarnessPlatformFile(String path)
-    : name = path.split(RegExp(r'[/\\]')).last,
-      uri = Uri.file(path);
+  _HarnessPlatformFile(this._path)
+    : name = _path
+          .split(RegExp(r'[/\\]'))
+          .where((part) => part.isNotEmpty)
+          .last,
+      uri = _uriForPath(_path);
+
+  final String _path;
+
+  static Uri _uriForPath(String path) {
+    final windows = path.contains(r'\') || RegExp(r'^[a-zA-Z]:').hasMatch(path);
+    return Uri.file(path, windows: windows);
+  }
+
+  @override
+  String? get path => _path;
 
   @override
   final String name;
@@ -364,6 +377,7 @@ final class _HarnessFilePicker extends FilePickerPlatform {
     final path = PlayerScreenHarness.filePickerSavePath;
     if (path == null || path.isEmpty) return null;
     File(path).writeAsBytesSync(bytes);
-    return Uri.file(path);
+    final windows = path.contains(r'\') || RegExp(r'^[a-zA-Z]:').hasMatch(path);
+    return Uri.file(path, windows: windows);
   }
 }
