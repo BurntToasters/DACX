@@ -18,8 +18,6 @@ ZIP_NAME="${APP_NAME}-macOS.zip"
 ZIP_PATH="$ROOT/release/$ZIP_NAME"
 ENTITLEMENTS_FILE="$ROOT/macos/Runner/Release.entitlements"
 MUSIC_ICON_SOURCE="$ROOT/assets/dacx_music_icon.png"
-MUSIC_ICON_NAME="dacx_music_icon.icns"
-MUSIC_ICON_DEST="$APP_BUNDLE/Contents/Resources/$MUSIC_ICON_NAME"
 KEYCHAIN_PATH="${KEYCHAIN_PATH:-}"
 
 find_codesigning_identities() {
