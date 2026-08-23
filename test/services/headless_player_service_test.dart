@@ -58,6 +58,16 @@ void main() {
       await service.dispose();
     });
 
+    test('stepFrame records forward and backward commands', () async {
+      final service = HeadlessPlayerService();
+
+      expect(await service.stepFrame(forward: true), isTrue);
+      expect(await service.stepFrame(forward: false), isTrue);
+
+      expect(service.frameStepCalls, [true, false]);
+      await service.dispose();
+    });
+
     test('open records calls for harness assertions', () async {
       final service = HeadlessPlayerService();
       await service.open('/media/song.mp3', play: false);

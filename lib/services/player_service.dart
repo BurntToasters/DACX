@@ -27,6 +27,7 @@ abstract class IPlayerService {
   Future<void> playPause();
   Future<void> stop();
   Future<void> seek(Duration position);
+  Future<bool> stepFrame({required bool forward});
   Future<void> setVolume(double volume);
   Future<void> setRate(double rate);
   Future<void> setPlaylistMode(PlaylistMode mode);
@@ -144,6 +145,21 @@ class PlayerService implements IPlayerService {
   @override
   Future<void> seek(Duration position) =>
       _guard('seek', () => player.seek(position));
+
+  @override
+  Future<bool> stepFrame({required bool forward}) async {
+    return await _guardValue<bool>('stepFrame', () async {
+          final platform = player.platform;
+          if (platform is NativePlayer) {
+            await platform.command([
+              forward ? 'frame-step' : 'frame-back-step',
+            ]);
+            return true;
+          }
+          return false;
+        }) ??
+        false;
+  }
 
   @override
   Future<void> setVolume(double volume) =>

@@ -1079,10 +1079,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shortcutExitFullscreen => 'Exit fullscreen';
 
   @override
-  String get shortcutChapterNext => 'Next chapter';
+  String get shortcutChapterNext => 'Next chapter / video frame';
 
   @override
-  String get shortcutChapterPrev => 'Previous chapter';
+  String get shortcutChapterPrev => 'Previous chapter / video frame';
 
   @override
   String get shortcutScreenshot => 'Save screenshot';

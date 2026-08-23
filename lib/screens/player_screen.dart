@@ -2300,10 +2300,20 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
         // Bare Escape is handled above; keep this for custom/accelerator paths.
         return _handleEscapeBack();
       case PlayerShortcutAction.chapterNext:
+        if (_canStepVideoFrame) {
+          _log('shortcut_frame_forward', category: DebugLogCategory.ui);
+          unawaited(_stepFrame(forward: true));
+          return KeyEventResult.handled;
+        }
         _log('shortcut_chapter_next', category: DebugLogCategory.ui);
         unawaited(_stepChapter(1));
         return KeyEventResult.handled;
       case PlayerShortcutAction.chapterPrev:
+        if (_canStepVideoFrame) {
+          _log('shortcut_frame_back', category: DebugLogCategory.ui);
+          unawaited(_stepFrame(forward: false));
+          return KeyEventResult.handled;
+        }
         _log('shortcut_chapter_prev', category: DebugLogCategory.ui);
         unawaited(_stepChapter(-1));
         return KeyEventResult.handled;
@@ -2361,6 +2371,27 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   }
 
   double _volumeBeforeMute = 100.0;
+
+  bool get _canStepVideoFrame {
+    final source = _player.currentSource;
+    if (source == null || _player.isPlaying || _player.isAudioFile) {
+      return false;
+    }
+    final extension = source.extension?.toLowerCase();
+    return _player.hasVideoOutput ||
+        (extension != null &&
+            PlayerPathUtils.videoExtensions.contains(extension));
+  }
+
+  Future<void> _stepFrame({required bool forward}) async {
+    final stepped = await _playerService.stepFrame(forward: forward);
+    if (stepped || _isDisposed) return;
+    _log(
+      'shortcut_frame_step_failed',
+      message: forward ? 'forward' : 'backward',
+      severity: DebugSeverity.warn,
+    );
+  }
 
   void _seekRelative(Duration offset) {
     final target = PlayerController.clampSeekTarget(

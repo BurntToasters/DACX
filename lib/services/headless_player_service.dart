@@ -38,6 +38,7 @@ class HeadlessPlayerService implements IPlayerService {
   bool _isPlaying = false;
   final List<({String path, bool play})> _openCalls = [];
   int playPauseInvocations = 0;
+  final List<bool> _frameStepCalls = [];
   final List<AudioTrack> _audioTrackCalls = [];
   final List<SubtitleTrack> _subtitleTrackCalls = [];
   final List<({String name, String value})> _propertyCalls = [];
@@ -156,6 +157,16 @@ class HeadlessPlayerService implements IPlayerService {
     if (_disposed) return;
     _positionCtrl.add(position);
   }
+
+  @override
+  Future<bool> stepFrame({required bool forward}) async {
+    if (_disposed) return false;
+    _frameStepCalls.add(forward);
+    return true;
+  }
+
+  @visibleForTesting
+  List<bool> get frameStepCalls => List.unmodifiable(_frameStepCalls);
 
   @override
   Future<void> setVolume(double volume) async {
