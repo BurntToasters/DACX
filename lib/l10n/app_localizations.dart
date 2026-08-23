@@ -1969,13 +1969,13 @@ abstract class AppLocalizations {
   /// No description provided for @shortcutChapterNext.
   ///
   /// In en, this message translates to:
-  /// **'Next chapter'**
+  /// **'Next chapter / video frame'**
   String get shortcutChapterNext;
 
   /// No description provided for @shortcutChapterPrev.
   ///
   /// In en, this message translates to:
-  /// **'Previous chapter'**
+  /// **'Previous chapter / video frame'**
   String get shortcutChapterPrev;
 
   /// No description provided for @shortcutScreenshot.

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Regenerate macos/Runner/dacx_music_icon.icns from assets/dacx_music_icon.png
 
 set -euo pipefail
