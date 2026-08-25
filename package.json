@@ -93,7 +93,8 @@
     "release:sign:gpg": "dotenv -e .env -- node scripts/gpg-sign.js",
     "release:draft": "dotenv -e .env -- node scripts/ensure-draft-release.cjs",
     "release:wait-draft": "dotenv -e .env -- node scripts/ensure-draft-release.cjs --wait",
-    "release:finalize": "dotenv -e .env -- node scripts/post-release-assets.js --finalize-release-assets",
+    "release:mirror": "dotenv -e .env -- node scripts/finalize-release-assets.js",
+    "release:finalize": "npm run release:mirror",
     "release:win": "npm run release:prepare && npm run release:draft && npm run build:win && npm run release:package:win && npm run release:sign:gpg && npm run release:finalize",
     "release:mac:codesign": "dotenv -e .env -- bash scripts/mac-codesign.sh",
     "release:mac:ssh": "dotenv -e .env -- bash scripts/mac-keychain-ssh.sh",
@@ -103,10 +104,10 @@
     "gitprune": "node scripts/git-prune-local-branches.js",
     "gitprune:dry": "node scripts/git-prune-local-branches.js --dry-run",
     "gitprune:force": "node scripts/git-prune-local-branches.js --force",
-    "localbuild:mac": "npm run build:mac && npm run release:package:mac && dotenv -e .env -- node scripts/post-release-assets.js --finalize-release-assets",
-    "localbuild:mac:sign": "npm run check:mac:toolchain && npm run release:prepare && npm run build:mac && npm run release:mac:ssh && npm run release:mac:codesign && dotenv -e .env -- node scripts/post-release-assets.js --finalize-release-assets",
-    "localbuild:win": "npm run build:win && npm run release:package:win && dotenv -e .env -- node scripts/post-release-assets.js --finalize-release-assets",
-    "localbuild:linux": "npm run build:linux && npm run release:package:linux && dotenv -e .env -- node scripts/post-release-assets.js --finalize-release-assets"
+    "localbuild:mac": "npm run build:mac && npm run release:package:mac && npm run release:mirror",
+    "localbuild:mac:sign": "npm run check:mac:toolchain && npm run release:prepare && npm run build:mac && npm run release:mac:ssh && npm run release:mac:codesign && npm run release:mirror",
+    "localbuild:win": "npm run build:win && npm run release:package:win && npm run release:mirror",
+    "localbuild:linux": "npm run build:linux && npm run release:package:linux && npm run release:mirror"
   },
   "devDependencies": {
     "cross-spawn": "^7.0.6",

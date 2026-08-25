@@ -9,10 +9,15 @@ import { isDirectExecution as isModuleDirectExecution } from "./direct-execution
 import {
   CLI_FLAG,
   copyReleaseAssets,
+  isBetaReleaseVersion,
   isDirectExecution,
   pathsEqual,
   run,
+  shouldSkipBetaMirror,
 } from "./post-release-assets.js";
+
+const STABLE_VERSION = "0.11.2";
+const BETA_VERSION = "0.11.2-beta.2";
 
 test("module entrypoint comparison tolerates Windows path casing", () => {
   const scriptUrl = new URL("./post-release-assets.js", import.meta.url);
@@ -68,11 +73,22 @@ test("mirrors, verifies, and removes conflicting destination artifacts", () => {
   fs.writeFileSync(path.join(releaseDir, "Dacx-Windows-x64.msi"), "installer");
   fs.writeFileSync(path.join(destination, "old-conflict.msi"), "stale");
 
-  assert.deepEqual(run({ releaseDir, env: { AFTER_PACK_LOC: destination } }), {
-    mirrored: true,
-    destination,
-    copiedEntries: 1,
-  });
+  assert.equal(isBetaReleaseVersion(STABLE_VERSION), false);
+  assert.equal(isBetaReleaseVersion(BETA_VERSION), true);
+  assert.equal(shouldSkipBetaMirror({}, BETA_VERSION), true);
+  assert.deepEqual(
+    run({
+      releaseDir,
+      env: { AFTER_PACK_LOC: destination },
+      version: STABLE_VERSION,
+    }),
+    {
+      mirrored: true,
+      destination,
+      copiedEntries: 1,
+      skippedBetaMirror: false,
+    },
+  );
   assert.equal(
     fs.existsSync(path.join(destination, "old-conflict.msi")),
     false,
@@ -101,4 +117,51 @@ test("rejects a mirror inside the release directory", () => {
     () => copyReleaseAssets(releaseDir, path.join(releaseDir, "mirror")),
     /cannot be inside the release directory/,
   );
+});
+
+test("skips AFTER_PACK_LOC mirroring for beta versions unless overridden", () => {
+  const root = makeTemporaryDirectory();
+  const releaseDir = path.join(root, "release");
+  const destination = path.join(root, "mirror");
+  fs.mkdirSync(releaseDir);
+  fs.writeFileSync(path.join(releaseDir, "Dacx-Windows-x64.msi"), "installer");
+
+  assert.deepEqual(
+    run({
+      releaseDir,
+      env: { AFTER_PACK_LOC: destination },
+      version: BETA_VERSION,
+    }),
+    {
+      mirrored: false,
+      destination: null,
+      skippedBetaMirror: true,
+    },
+  );
+  assert.equal(fs.existsSync(path.join(destination, "Dacx-Windows-x64.msi")), false);
+
+  assert.deepEqual(
+    run({
+      releaseDir,
+      env: {
+        AFTER_PACK_LOC: destination,
+        OVERRIDE_BETA_MIRROR_SKIP: "1",
+      },
+      version: BETA_VERSION,
+    }),
+    {
+      mirrored: true,
+      destination,
+      copiedEntries: 1,
+      skippedBetaMirror: false,
+    },
+  );
+});
+
+test("release finalization runs the dedicated mirror command", () => {
+  const packageJson = JSON.parse(
+    fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  assert.match(packageJson.scripts["release:mirror"], /scripts\/finalize-release-assets\.js/);
+  assert.equal(packageJson.scripts["release:finalize"], "npm run release:mirror");
 });
