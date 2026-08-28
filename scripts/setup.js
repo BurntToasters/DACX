@@ -12,7 +12,6 @@ if (!['win', 'mac', 'linux'].includes(target)) {
   process.exit(1);
 }
 
-// Helpers
 function run(cmd, opts = {}) {
   console.log(`\n▶ ${cmd}`);
   try {

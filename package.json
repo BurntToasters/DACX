@@ -65,6 +65,8 @@
     "check:cacert:advisory": "node scripts/check-cacert.js",
     "cacert:update": "node scripts/update-cacert.js",
     "analyze": "fvm dart analyze",
+    "lint": "npm run lint:comments",
+    "lint:comments": "node scripts/lint-comments.mjs lib test scripts",
     "format": "fvm dart format lib/ test/",
     "format:check": "fvm dart format --set-exit-if-changed lib/ test/",
     "sync-version": "node scripts/sync-version.js",
