@@ -304,6 +304,9 @@ base class _HarnessPlatformFile extends PlatformFile {
   get xFile => throw UnimplementedError();
 
   @override
+  int? lengthSync() => 0;
+
+  @override
   Future<int> length() async => 0;
 
   @override
@@ -323,6 +326,7 @@ final class _HarnessFilePicker extends FilePickerPlatform {
     Function(FilePickerStatus)? onFileLoading,
     int compressionQuality = 0,
     AndroidOptions androidOptions = const AndroidOptions(),
+    DarwinOptions darwinOptions = const DarwinOptions(),
     WindowsOptions windowsOptions = const WindowsOptions(),
     LinuxOptions linuxOptions = const LinuxOptions(),
     WebOptions webOptions = const WebOptions(),
@@ -341,6 +345,7 @@ final class _HarnessFilePicker extends FilePickerPlatform {
     Function(FilePickerStatus)? onFileLoading,
     int compressionQuality = 0,
     AndroidOptions androidOptions = const AndroidOptions(),
+    DarwinOptions darwinOptions = const DarwinOptions(),
     WindowsOptions windowsOptions = const WindowsOptions(),
     LinuxOptions linuxOptions = const LinuxOptions(),
     WebOptions webOptions = const WebOptions(),

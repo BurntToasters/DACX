@@ -379,6 +379,72 @@ void main() {
     expect(find.byTooltip('Play'), findsOneWidget);
   });
 
+  testWidgets('space shortcut still works after focus is cleared', (
+    tester,
+  ) async {
+    PlayerScreenHarness.configureDesktopViewport(tester);
+    final services = await PlayerScreenHarness.createServices();
+    final player = HeadlessPlayerService();
+
+    await tester.pumpWidget(
+      PlayerScreenHarness.wrap(
+        settings: services.settings,
+        debugLog: services.debugLog,
+        updates: services.updates,
+        playerService: player,
+        headlessMediaSurface: true,
+        initialLoadedSource: PlayableSource.file('/test/song.mp3'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    FocusManager.instance.primaryFocus?.unfocus(
+      disposition: UnfocusDisposition.previouslyFocusedChild,
+    );
+    FocusManager.instance.rootScope.unfocus();
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+
+    expect(player.playPauseInvocations, 1);
+  });
+
+  testWidgets('space shortcut still works after tapping transport controls', (
+    tester,
+  ) async {
+    PlayerScreenHarness.configureDesktopViewport(tester);
+    final services = await PlayerScreenHarness.createServices();
+    final player = HeadlessPlayerService();
+
+    await tester.pumpWidget(
+      PlayerScreenHarness.wrap(
+        settings: services.settings,
+        debugLog: services.debugLog,
+        updates: services.updates,
+        playerService: player,
+        headlessMediaSurface: true,
+        initialLoadedSource: PlayableSource.file('/test/song.mp3'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    player.emitPlaying(true);
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Pause'));
+    await tester.pump();
+
+    final afterTap = player.playPauseInvocations;
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+
+    expect(player.playPauseInvocations, afterTap + 1);
+  });
+
   testWidgets('space shortcut is ignored when no media is loaded', (
     tester,
   ) async {
@@ -2000,6 +2066,40 @@ void main() {
     expect(await player.getProperty('chapter'), isNull);
     expect(player.frameStepCalls, [true, false]);
     expect(find.textContaining('Chapter:'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(player.playPauseInvocations, 1);
+  });
+
+  testWidgets('ctrl arrow key repeat does not frame-step twice', (
+    tester,
+  ) async {
+    PlayerScreenHarness.configureDesktopViewport(tester);
+    final services = await PlayerScreenHarness.createServices();
+    final player = HeadlessPlayerService();
+
+    await tester.pumpWidget(
+      PlayerScreenHarness.wrap(
+        settings: services.settings,
+        debugLog: services.debugLog,
+        updates: services.updates,
+        playerService: player,
+        headlessMediaSurface: true,
+        initialLoadedSource: PlayableSource.file('/test/movie.mkv'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(player.frameStepCalls, [true]);
   });
 
   testWidgets('ctrl arrow does not frame-step paused audio', (tester) async {

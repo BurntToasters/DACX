@@ -138,6 +138,10 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final FocusNode _shortcutFocus = FocusNode(
+    debugLabel: 'player-shortcuts',
+    skipTraversal: true,
+  );
   late final IPlayerService _playerService;
   VideoController? _videoController;
   late final SeekPreviewService _seekPreviewService;
@@ -326,6 +330,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     );
 
     windowManager.addListener(this);
+    HardwareKeyboard.instance.addHandler(_onGlobalShortcutKey);
 
     // Apply saved playback settings.
     unawaited(
@@ -618,6 +623,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   @override
   void dispose() {
     _isDisposed = true;
+    HardwareKeyboard.instance.removeHandler(_onGlobalShortcutKey);
+    _shortcutFocus.dispose();
     windowManager.removeListener(this);
     if (Platform.isMacOS) {
       const MethodChannel(
@@ -1193,11 +1200,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     _log('file_picker_open_requested');
     try {
       final initialDirectory = _settings.lastOpenDirectory;
-      final file = await FilePicker.pickFile(
-        type: FileType.any,
-        windowsOptions: _filePickerWindowsOptions,
-        linuxOptions: _filePickerLinuxOptions,
-        initialDirectory: initialDirectory,
+      final file = await _pickWithFocusRestore(
+        () => FilePicker.pickFile(
+          type: FileType.any,
+          windowsOptions: _filePickerWindowsOptions,
+          linuxOptions: _filePickerLinuxOptions,
+          initialDirectory: initialDirectory,
+        ),
       );
 
       if (file == null) {
@@ -1261,10 +1270,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   Future<void> _openFolder({bool playNow = true}) async {
     _log('folder_picker_open_requested');
     try {
-      final folder = await FilePicker.getDirectoryPath(
-        windowsOptions: _filePickerWindowsOptions,
-        linuxOptions: _filePickerLinuxOptions,
-        initialDirectory: _settings.lastOpenDirectory,
+      final folder = await _pickWithFocusRestore(
+        () => FilePicker.getDirectoryPath(
+          windowsOptions: _filePickerWindowsOptions,
+          linuxOptions: _filePickerLinuxOptions,
+          initialDirectory: _settings.lastOpenDirectory,
+        ),
       );
       if (folder == null || folder.trim().isEmpty) {
         _log('folder_picker_cancelled');
@@ -1389,12 +1400,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   Future<void> _openPlaylistPicker({bool playNow = true}) async {
     _log('playlist_picker_open_requested');
     try {
-      final file = await FilePicker.pickFile(
-        type: FileType.custom,
-        allowedExtensions: M3uPlaylist.extensions.toList(),
-        windowsOptions: _filePickerWindowsOptions,
-        linuxOptions: _filePickerLinuxOptions,
-        initialDirectory: _settings.lastOpenDirectory,
+      final file = await _pickWithFocusRestore(
+        () => FilePicker.pickFile(
+          type: FileType.custom,
+          allowedExtensions: M3uPlaylist.extensions.toList(),
+          windowsOptions: _filePickerWindowsOptions,
+          linuxOptions: _filePickerLinuxOptions,
+          initialDirectory: _settings.lastOpenDirectory,
+        ),
       );
       final path = FilePickerPath.fromPlatformFilePath(file?.path);
       if (path == null) return;
@@ -1447,16 +1460,18 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     final l10n = AppLocalizations.of(context);
     try {
       final content = M3uPlaylist.encode(_playlist.items);
-      final saved = await FilePicker.saveFile(
-        dialogTitle: l10n.buttonSavePlaylist,
-        fileName: 'playlist.m3u',
-        type: FileType.custom,
-        allowedExtensions: const ['m3u'],
-        mimeType: 'audio/x-mpegurl',
-        bytes: Uint8List.fromList(utf8.encode(content)),
-        windowsOptions: _filePickerWindowsOptions,
-        linuxOptions: _filePickerLinuxOptions,
-        initialDirectory: _settings.lastOpenDirectory,
+      final saved = await _pickWithFocusRestore(
+        () => FilePicker.saveFile(
+          dialogTitle: l10n.buttonSavePlaylist,
+          fileName: 'playlist.m3u',
+          type: FileType.custom,
+          allowedExtensions: const ['m3u'],
+          mimeType: 'audio/x-mpegurl',
+          bytes: Uint8List.fromList(utf8.encode(content)),
+          windowsOptions: _filePickerWindowsOptions,
+          linuxOptions: _filePickerLinuxOptions,
+          initialDirectory: _settings.lastOpenDirectory,
+        ),
       );
       final path = FilePickerPath.fromSaveUri(saved);
       if (path == null) return;
@@ -2198,21 +2213,80 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
 
   // ── Keyboard shortcuts ────────────────────────────────────
 
+  bool _playerRouteIsCurrent() {
+    if (!mounted) return false;
+    final route = ModalRoute.of(context);
+    return route == null || route.isCurrent;
+  }
+
+  bool _shortcutFocusInPath() {
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary == null) return false;
+    return primary == _shortcutFocus ||
+        primary.ancestors.contains(_shortcutFocus);
+  }
+
+  bool _isEditableFocus(FocusNode primary) {
+    final ctx = primary.context;
+    if (ctx == null) return false;
+    return ctx.findAncestorStateOfType<EditableTextState>() != null;
+  }
+
+  bool _onGlobalShortcutKey(KeyEvent event) {
+    if (!mounted || _isDisposed) return false;
+    if (!_playerRouteIsCurrent()) return false;
+    if (_shortcutFocusInPath()) return false;
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary != null && _isEditableFocus(primary)) return false;
+    return _handleKeyEvent(_shortcutFocus, event) == KeyEventResult.handled;
+  }
+
+  void _restoreShortcutFocus({bool refocusNativeWindow = true}) {
+    if (!mounted || _isDisposed) return;
+    if (_shortcutFocus.canRequestFocus) {
+      _shortcutFocus.requestFocus();
+    }
+    if (refocusNativeWindow) {
+      unawaited(windowManager.focus().catchError((_) {}));
+    }
+  }
+
+  @override
+  void onWindowFocus() {
+    _restoreShortcutFocus(refocusNativeWindow: false);
+  }
+
+  Future<T> _pickWithFocusRestore<T>(Future<T> Function() pick) async {
+    try {
+      return await pick();
+    } finally {
+      _restoreShortcutFocus();
+    }
+  }
+
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     final hk = HardwareKeyboard.instance;
+    final pressed = LogicalKeyboardKey.expandSynonyms(hk.logicalKeysPressed);
+    final controlPressed =
+        hk.isControlPressed || pressed.contains(LogicalKeyboardKey.control);
+    final metaPressed =
+        hk.isMetaPressed || pressed.contains(LogicalKeyboardKey.meta);
+    final shiftPressed =
+        hk.isShiftPressed || pressed.contains(LogicalKeyboardKey.shift);
+    final altPressed =
+        hk.isAltPressed || pressed.contains(LogicalKeyboardKey.alt);
     if (event is KeyDownEvent &&
         event.logicalKey == LogicalKeyboardKey.escape &&
-        !hk.isMetaPressed &&
-        !hk.isControlPressed &&
-        !hk.isShiftPressed &&
-        !hk.isAltPressed) {
+        !metaPressed &&
+        !controlPressed &&
+        !shiftPressed &&
+        !altPressed) {
       return _handleEscapeBack();
     }
     if (event is KeyDownEvent &&
         (event.logicalKey == LogicalKeyboardKey.f1 ||
             (event.logicalKey == LogicalKeyboardKey.question) ||
-            (event.logicalKey == LogicalKeyboardKey.slash &&
-                hk.isShiftPressed))) {
+            (event.logicalKey == LogicalKeyboardKey.slash && shiftPressed))) {
       unawaited(_showKeybindsDialog());
       return KeyEventResult.handled;
     }
@@ -2220,10 +2294,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
     final shortcut = PlayerShortcutsService.resolve(
       event: event,
       hasMedia: _currentFile != null,
-      isMetaPressed: hk.isMetaPressed,
-      isControlPressed: hk.isControlPressed,
-      isShiftPressed: hk.isShiftPressed,
-      isAltPressed: hk.isAltPressed,
+      isMetaPressed: metaPressed,
+      isControlPressed: controlPressed,
+      isShiftPressed: shiftPressed,
+      isAltPressed: altPressed,
       customBindings: custom.isEmpty ? null : custom,
     );
 
@@ -2636,7 +2710,9 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   @override
   Widget build(BuildContext context) {
     return Focus(
+      focusNode: _shortcutFocus,
       autofocus: true,
+      skipTraversal: true,
       onKeyEvent: _handleKeyEvent,
       child: Scaffold(
         key: _scaffoldKey,
@@ -2694,6 +2770,9 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
                                 onTap: _currentFile == null
                                     ? null
                                     : () {
+                                        _restoreShortcutFocus(
+                                          refocusNativeWindow: false,
+                                        );
                                         _revealFullscreenChrome();
                                         _mediaSurfaceTapTimer?.cancel();
                                         _mediaSurfaceTapTimer = Timer(
@@ -4792,12 +4871,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   Future<void> _pickExternalAudio() async {
     final l10n = AppLocalizations.of(context);
     try {
-      final file = await FilePicker.pickFile(
-        type: FileType.custom,
-        allowedExtensions: PlayerPathUtils.audioExtensions.toList()..sort(),
-        windowsOptions: _filePickerWindowsOptions,
-        linuxOptions: _filePickerLinuxOptions,
-        initialDirectory: _settings.lastOpenDirectory,
+      final file = await _pickWithFocusRestore(
+        () => FilePicker.pickFile(
+          type: FileType.custom,
+          allowedExtensions: PlayerPathUtils.audioExtensions.toList()..sort(),
+          windowsOptions: _filePickerWindowsOptions,
+          linuxOptions: _filePickerLinuxOptions,
+          initialDirectory: _settings.lastOpenDirectory,
+        ),
       );
       final path = FilePickerPath.fromPlatformFilePath(file?.path);
       if (path == null) return;
@@ -4833,20 +4914,22 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   Future<void> _pickExternalSubtitle() async {
     final l10n = AppLocalizations.of(context);
     try {
-      final file = await FilePicker.pickFile(
-        type: FileType.custom,
-        allowedExtensions: const [
-          'srt',
-          'ass',
-          'ssa',
-          'vtt',
-          'sub',
-          'idx',
-          'sup',
-        ],
-        windowsOptions: _filePickerWindowsOptions,
-        linuxOptions: _filePickerLinuxOptions,
-        initialDirectory: _settings.lastOpenDirectory,
+      final file = await _pickWithFocusRestore(
+        () => FilePicker.pickFile(
+          type: FileType.custom,
+          allowedExtensions: const [
+            'srt',
+            'ass',
+            'ssa',
+            'vtt',
+            'sub',
+            'idx',
+            'sup',
+          ],
+          windowsOptions: _filePickerWindowsOptions,
+          linuxOptions: _filePickerLinuxOptions,
+          initialDirectory: _settings.lastOpenDirectory,
+        ),
       );
       final path = FilePickerPath.fromPlatformFilePath(file?.path);
       if (path == null) return;
@@ -5144,10 +5227,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
 
   Future<void> _pickFilesToEnqueue() async {
     try {
-      final files = await FilePicker.pickFiles(
-        type: FileType.media,
-        windowsOptions: _filePickerWindowsOptions,
-        linuxOptions: _filePickerLinuxOptions,
+      final files = await _pickWithFocusRestore(
+        () => FilePicker.pickFiles(
+          type: FileType.media,
+          windowsOptions: _filePickerWindowsOptions,
+          linuxOptions: _filePickerLinuxOptions,
+        ),
       );
       final paths = files
           .map((file) => FilePickerPath.fromPlatformFilePath(file.path))

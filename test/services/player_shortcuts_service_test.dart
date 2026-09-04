@@ -272,6 +272,16 @@ void main() {
       expect(action, isNull);
     });
 
+    test('Ctrl+ArrowRight KeyRepeat does not retrigger chapterNext', () {
+      final action = PlayerShortcutsService.resolve(
+        event: _keyRepeat(LogicalKeyboardKey.arrowRight),
+        hasMedia: true,
+        isMetaPressed: false,
+        isControlPressed: true,
+      );
+      expect(action, isNull);
+    });
+
     test('KeyRepeatEvent works for repeatable actions (seek)', () {
       final action = PlayerShortcutsService.resolve(
         event: _keyRepeat(LogicalKeyboardKey.arrowRight),
