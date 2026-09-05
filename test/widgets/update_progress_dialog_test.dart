@@ -245,8 +245,22 @@ void main() {
   });
 
   group('UpdatePendingMarker', () {
+    late Directory markerDir;
+
+    setUp(() {
+      markerDir = Directory.systemTemp.createTempSync('dacx-pending-marker-');
+      SelfUpdateService.updateCacheDirOverride = markerDir;
+    });
+
+    tearDown(() {
+      SelfUpdateService.updateCacheDirOverride = null;
+      if (markerDir.existsSync()) {
+        markerDir.deleteSync(recursive: true);
+      }
+    });
+
     test('writes, reads, and clears pending update marker', () async {
-      UpdatePendingMarker.readAndClear();
+      expect(UpdatePendingMarker.readAndClear(), isNull);
 
       await UpdatePendingMarker.write(
         targetVersion: '0.8.0-beta.2',
