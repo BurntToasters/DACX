@@ -14,6 +14,8 @@ target_link_libraries(dacx-update-helper PRIVATE
   wintrust.lib
   shell32.lib
   advapi32.lib
+  ole32.lib
+  uuid.lib
 )
 
 # Land next to dacx.exe (Flutter's installable app dir). Relying on install(TARGETS)

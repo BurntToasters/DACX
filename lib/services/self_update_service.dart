@@ -1274,7 +1274,10 @@ class UpdatePendingMarker {
       final raw = f.readAsStringSync();
       f.deleteSync();
       final decoded = jsonDecode(raw);
-      if (decoded is Map<String, Object?>) return decoded;
+      if (decoded is! Map) return null;
+      return <String, Object?>{
+        for (final entry in decoded.entries) entry.key.toString(): entry.value,
+      };
     } catch (_) {
       try {
         f.deleteSync();

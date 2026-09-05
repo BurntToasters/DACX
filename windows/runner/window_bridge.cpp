@@ -6,6 +6,9 @@
 #include <flutter/method_channel.h>
 #include <flutter/standard_method_codec.h>
 
+#include <propkey.h>
+#include <propvarutil.h>
+#include <shlobj.h>
 #include <shobjidl.h>
 
 #include <memory>
@@ -15,6 +18,7 @@
 #include <vector>
 
 #include "flutter_window.h"
+#include "resource.h"
 
 namespace dacx {
 
@@ -96,6 +100,61 @@ std::wstring Basename(const std::wstring& path) {
   const size_t slash = path.find_last_of(L"\\/");
   if (slash == std::wstring::npos) return path;
   return path.substr(slash + 1);
+}
+
+void ApplyWindowAppIdentity(HWND hwnd) {
+  if (hwnd == nullptr) return;
+
+  wchar_t exe_path[MAX_PATH] = {};
+  const DWORD n = ::GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
+  if (n == 0 || n >= MAX_PATH) return;
+
+  IPropertyStore* store = nullptr;
+  HRESULT hr = ::SHGetPropertyStoreForWindow(hwnd, IID_PPV_ARGS(&store));
+  if (SUCCEEDED(hr) && store != nullptr) {
+    PROPVARIANT pv;
+    if (SUCCEEDED(::InitPropVariantFromString(kAppUserModelId, &pv))) {
+      store->SetValue(PKEY_AppUserModel_ID, pv);
+      ::PropVariantClear(&pv);
+    }
+    const std::wstring command = QuoteArgument(exe_path);
+    if (SUCCEEDED(::InitPropVariantFromString(command.c_str(), &pv))) {
+      store->SetValue(PKEY_AppUserModel_RelaunchCommand, pv);
+      ::PropVariantClear(&pv);
+    }
+    if (SUCCEEDED(::InitPropVariantFromString(L"Dacx", &pv))) {
+      store->SetValue(PKEY_AppUserModel_RelaunchDisplayNameResource, pv);
+      ::PropVariantClear(&pv);
+    }
+    const std::wstring icon =
+        std::wstring(exe_path) + L",-" + std::to_wstring(IDI_APP_ICON);
+    if (SUCCEEDED(::InitPropVariantFromString(icon.c_str(), &pv))) {
+      store->SetValue(PKEY_AppUserModel_RelaunchIconResource, pv);
+      ::PropVariantClear(&pv);
+    }
+    store->Commit();
+    store->Release();
+  }
+
+  const HINSTANCE inst = ::GetModuleHandle(nullptr);
+  const auto big = ::LoadImage(
+      inst, MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
+      ::GetSystemMetrics(SM_CXICON), ::GetSystemMetrics(SM_CYICON),
+      LR_DEFAULTCOLOR | LR_SHARED);
+  const auto small_icon = ::LoadImage(
+      inst, MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
+      ::GetSystemMetrics(SM_CXSMICON), ::GetSystemMetrics(SM_CYSMICON),
+      LR_DEFAULTCOLOR | LR_SHARED);
+  if (big != nullptr) {
+    ::SendMessage(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(big));
+  }
+  if (small_icon != nullptr) {
+    ::SendMessage(hwnd, WM_SETICON, ICON_SMALL,
+                  reinterpret_cast<LPARAM>(small_icon));
+  }
+
+  ::SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSHNOWAIT, exe_path,
+                   nullptr);
 }
 
 bool EnsureTaskbar() {
@@ -212,9 +271,18 @@ std::vector<std::string> ReadStringList(const flutter::EncodableValue* args) {
 }  // namespace
 
 void RegisterPrimaryWindow(FlutterWindow* window) {
-  std::lock_guard<std::mutex> lock(g_mutex);
-  g_primary_window = window;
-  g_primary_alive = (window != nullptr);
+  HWND hwnd = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_primary_window = window;
+    g_primary_alive = (window != nullptr);
+    if (window != nullptr) {
+      hwnd = window->GetHandle();
+    }
+  }
+  if (hwnd != nullptr) {
+    ApplyWindowAppIdentity(hwnd);
+  }
 }
 
 void ActivatePrimaryWindow() {

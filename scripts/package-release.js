@@ -470,8 +470,9 @@ function renderWixV4FileAssociationComponent(audioIconFileName) {
 
 const DACX_APP_USER_MODEL_ID = "run.rosie.dacx";
 
-function renderWixStartMenuShortcutTree({ indent, includeIcon }) {
-  const iconAttr = includeIcon ? ' Icon="AppIcon.ico"' : "";
+function renderWixStartMenuShortcutTree({ indent }) {
+  // No Shortcut Icon= / MSI Icon table. That cache is keyed by ProductCode, so
+  // taskbar pins go generic after upgrade. Windows reads the icon from dacx.exe.
   return [
     `${indent}<Directory Name="Dacx">`,
     `${indent}  <Component Id="CMP_START_MENU_SHORTCUT" Guid="*">`,
@@ -480,7 +481,7 @@ function renderWixStartMenuShortcutTree({ indent, includeIcon }) {
     `${indent}      Name="Dacx"`,
     `${indent}      Description="Dacx media player"`,
     `${indent}      Target="[INSTALLFOLDER]dacx.exe"`,
-    `${indent}      WorkingDirectory="INSTALLFOLDER"${iconAttr}>`,
+    `${indent}      WorkingDirectory="INSTALLFOLDER">`,
     `${indent}      <ShortcutProperty Key="System.AppUserModel.ID" Value="${DACX_APP_USER_MODEL_ID}" />`,
     `${indent}    </Shortcut>`,
     `${indent}    <RemoveFolder Id="RemoveDacxStartMenuFolder" On="uninstall" />`,
@@ -790,7 +791,7 @@ ${renderDirectoryContents(rootNode, "        ").join("\n")}
 
   <Fragment>
     <StandardDirectory Id="ProgramMenuFolder">
-${renderWixStartMenuShortcutTree({ indent: "      ", includeIcon: hasAppIcon })}
+${renderWixStartMenuShortcutTree({ indent: "      " })}
     </StandardDirectory>
   </Fragment>
 

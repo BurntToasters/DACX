@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import crossSpawn from "cross-spawn";
+import { isDirectExecution } from "./direct-execution.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,8 +37,28 @@ function createInitialResults() {
   };
 }
 
-function stripAnsi(value) {
+export function stripAnsi(value) {
   return value.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "");
+}
+
+export function flutterTestOutputLooksFailed(output) {
+  const clean = stripAnsi(output);
+  if (/Failed to load/i.test(clean)) return true;
+  if (/Some tests failed/i.test(clean)) return true;
+  if (/^\d+:\d+\s+\+\d+\s+-\d+:/m.test(clean)) return true;
+  return false;
+}
+
+export function flutterTestOutputLooksFullyPassed(output) {
+  return /All\s+(?:\d+\s+)?tests?\s+passed!?/i.test(stripAnsi(output));
+}
+
+export function flutterTestRunSucceeded(output, exitStatus) {
+  return (
+    exitStatus === 0 &&
+    flutterTestOutputLooksFullyPassed(output) &&
+    !flutterTestOutputLooksFailed(output)
+  );
 }
 
 function printTail(output) {
@@ -48,7 +69,7 @@ function printTail(output) {
   console.log(`${colors.red}${tail}${colors.reset}`);
 }
 
-function parseTest(output, results) {
+export function parseTest(output, results) {
   const cleanOutput = stripAnsi(output);
   const passedMatch = cleanOutput.match(/(\d+)\s+tests?\s+passed/i);
   const failedMatch = cleanOutput.match(/(\d+)\s+tests?\s+failed/i);
@@ -86,7 +107,10 @@ function runCommand(name, command, args, parser, results, options = {}) {
   const output = `${run.stdout || ""}${run.stderr || ""}`;
   if (parser) parser(output, results);
 
-  if (!run.error && run.status === 0) {
+  const exitOk = !run.error && run.status === 0;
+  const testOutputOk =
+    name !== "test" || flutterTestRunSucceeded(output, run.status ?? 1);
+  if (exitOk && testOutputOk) {
     results[name].status = "passed";
     console.log(`${colors.green}✓ ${name} passed${colors.reset}\n`);
     return true;
@@ -97,7 +121,9 @@ function runCommand(name, command, args, parser, results, options = {}) {
     ? run.error.message
     : run.status === null
       ? `signal ${run.signal || "unknown"}`
-      : `exit code ${run.status}`;
+      : name === "test" && exitOk && !testOutputOk
+        ? "test output missing All tests passed or contains failures"
+        : `exit code ${run.status}`;
   console.log(`${colors.red}✗ ${name} failed (${reason})${colors.reset}`);
   printTail(output);
   console.log("");
@@ -262,4 +288,6 @@ function main() {
   return printSummary(results);
 }
 
-process.exit(main());
+if (isDirectExecution(import.meta.url)) {
+  process.exit(main());
+}
