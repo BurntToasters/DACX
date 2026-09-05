@@ -24,9 +24,11 @@
 
 ## Changes in `v0.11.2-beta.4:`
 - **Fix - Windows taskbar icon after update:** After an MSI upgrade, a pinned Dacx could show the generic document glyph until unpin/re-pin. The updater now refreshes Explorer and existing taskbar shortcuts; the window sets relaunch icon properties. The Start Menu shortcut no longer uses the MSI Icon table (pins resolve from `dacx.exe`). Add/Remove Programs still uses `ARPPRODUCTICON`.
-- **Fix - Test suite green on load failures:** `test-all` no longer treats `flutter test` as passed when files fail to compile/load or the log never prints `All tests passed`.
+- **Fix - Test suite green on load failures:** `test-all` no longer treats `flutter test` as passed when files fail to compile/load or the log never prints `All tests passed`. The coverage gate is skipped when tests already failed.
 - **Fix - Pending-update snackbar JSON:** `UpdatePendingMarker.readAndClear` accepts the `Map` `jsonDecode` actually returns.
-- **Fix - Credential stream URLs:** Open With / IPC no longer treats `http(s)` URLs with embedded userinfo as local files. `test-all` skips the coverage gate when tests already failed. Open With no longer attaches to an untitled Flutter window.
+- **Fix - Credential stream URLs:** Open With / IPC no longer treats `http(s)` URLs with embedded userinfo as local files.
+- **Fix - Open With window targeting:** A second instance only forwards to a titled Dacx window, not any untitled Flutter runner.
+- **Update - Linux/Flatpak drag-and-drop:** `desktop_drop` 0.8.4 registers the portal FileTransfer target so sandboxed drops yield openable paths.
 
 ## Changes in `v0.11.2-beta.3:`
 - **Fix - Keyboard shortcuts:** After file pickers, clicking the video, or losing window focus, Space / arrows / Ctrl-Cmd chords stopped working. Shortcuts now keep working when Flutter focus is lost; Windows restores keyboard to the Flutter view after modal dialogs. Held `Ctrl/Cmd+Arrow` no longer repeats paused-video frame-step.
