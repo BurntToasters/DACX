@@ -213,6 +213,19 @@ Win32Window::MessageHandler(HWND hwnd,
       }
       return 0;
 
+    case WM_SETFOCUS:
+      if (child_content_ != nullptr) {
+        SetFocus(child_content_);
+        return 0;
+      }
+      break;
+
+    case WM_ENABLE:
+      if (wparam && child_content_ != nullptr) {
+        SetFocus(child_content_);
+      }
+      return 0;
+
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       UpdateTheme(hwnd);
       return 0;

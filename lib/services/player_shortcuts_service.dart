@@ -262,11 +262,15 @@ class PlayerShortcutsService {
       return PlayerShortcutAction.toggleEqualizer;
     }
     if (key == LogicalKeyboardKey.arrowRight) {
-      if (primaryModifierPressed) return PlayerShortcutAction.chapterNext;
+      if (primaryModifierPressed) {
+        return event is KeyDownEvent ? PlayerShortcutAction.chapterNext : null;
+      }
       return PlayerShortcutAction.seekForward;
     }
     if (key == LogicalKeyboardKey.arrowLeft) {
-      if (primaryModifierPressed) return PlayerShortcutAction.chapterPrev;
+      if (primaryModifierPressed) {
+        return event is KeyDownEvent ? PlayerShortcutAction.chapterPrev : null;
+      }
       return PlayerShortcutAction.seekBack;
     }
     if (key == LogicalKeyboardKey.arrowUp) {
