@@ -433,7 +433,7 @@ void RefreshLinksInDir(const std::wstring& dir, const std::wstring& exe_path) {
       continue;
     }
 
-    link->SetIconLocation(exe_path.c_str(), 0);
+    link->SetIconLocation(exe_path.c_str(), -101);
     hr = persist->Save(nullptr, TRUE);
     persist->Release();
     link->Release();
@@ -442,6 +442,21 @@ void RefreshLinksInDir(const std::wstring& dir, const std::wstring& exe_path) {
                      lnk.c_str(), nullptr);
       LogLine(L"refreshed pin icon " + lnk);
     }
+  } while (FindNextFileW(find, &fd));
+  FindClose(find);
+}
+
+void RefreshChildShortcutDirs(const std::wstring& dir,
+                              const std::wstring& exe_path) {
+  WIN32_FIND_DATAW fd{};
+  HANDLE find = FindFirstFileW((dir + L"\\*").c_str(), &fd);
+  if (find == INVALID_HANDLE_VALUE) return;
+  do {
+    if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) continue;
+    if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) {
+      continue;
+    }
+    RefreshLinksInDir(dir + L"\\" + fd.cFileName, exe_path);
   } while (FindNextFileW(find, &fd));
   FindClose(find);
 }
@@ -459,7 +474,9 @@ void RefreshPinnedShortcuts(const std::wstring& exe_path) {
                             L"User Pinned";
   CoTaskMemFree(appdata);
   RefreshLinksInDir(root + L"\\TaskBar", exe_path);
-  RefreshLinksInDir(root + L"\\ImplicitAppShortcuts", exe_path);
+  const std::wstring implicit = root + L"\\ImplicitAppShortcuts";
+  RefreshLinksInDir(implicit, exe_path);
+  RefreshChildShortcutDirs(implicit, exe_path);
 }
 
 void RelaunchDacx(const std::wstring& exe_path) {

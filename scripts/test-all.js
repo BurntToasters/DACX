@@ -229,20 +229,27 @@ function main() {
       `${colors.blue}⏭  coverage skipped (DACX_SKIP_COVERAGE=1)${colors.reset}\n`,
     );
   } else {
-    runCommand(
+    const testPassed = runCommand(
       "test",
       "fvm",
       ["flutter", "test", "--coverage"],
       parseTest,
       results,
     );
-    runCommand(
-      "coverage",
-      "node",
-      ["scripts/check-coverage.js"],
-      null,
-      results,
-    );
+    if (testPassed) {
+      runCommand(
+        "coverage",
+        "node",
+        ["scripts/check-coverage.js"],
+        null,
+        results,
+      );
+    } else {
+      results.coverage.status = "skipped";
+      console.log(
+        `${colors.blue}⏭  coverage skipped (tests failed)${colors.reset}\n`,
+      );
+    }
   }
 
   if (process.env.DACX_SKIP_BUILD_SMOKE === "1") {

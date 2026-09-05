@@ -77,7 +77,14 @@ abstract final class PlayerPathUtils {
       // `file:` is decoded by [normalizeDropPath] / [coerceOpenRequest].
       if (scheme == 'file') return false;
       // Stream URLs are opened via [PlayableSource.url], not mpv protocols.
-      if (scheme == 'http' || scheme == 'https') return false;
+      if (scheme == 'http' || scheme == 'https') {
+        try {
+          if (Uri.parse(trimmed).userInfo.isNotEmpty) return true;
+        } catch (_) {
+          return true;
+        }
+        return false;
+      }
       return true;
     }
     return false;
