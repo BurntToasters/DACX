@@ -245,8 +245,22 @@ void main() {
   });
 
   group('UpdatePendingMarker', () {
+    late Directory markerDir;
+
+    setUp(() {
+      markerDir = Directory.systemTemp.createTempSync('dacx-pending-marker-');
+      SelfUpdateService.updateCacheDirOverride = markerDir;
+    });
+
+    tearDown(() {
+      SelfUpdateService.updateCacheDirOverride = null;
+      if (markerDir.existsSync()) {
+        markerDir.deleteSync(recursive: true);
+      }
+    });
+
     test('writes, reads, and clears pending update marker', () async {
-      UpdatePendingMarker.readAndClear();
+      expect(UpdatePendingMarker.readAndClear(), isNull);
 
       await UpdatePendingMarker.write(
         targetVersion: '0.8.0-beta.2',
@@ -258,6 +272,20 @@ void main() {
       expect(marker?['target_version'], '0.8.0-beta.2');
       expect(marker?['channel'], 'beta');
       expect(marker?['started_at_ms'], isA<int>());
+      expect(UpdatePendingMarker.readAndClear(), isNull);
+    });
+
+    test('readAndClear accepts jsonDecode map values', () async {
+      final file = File('${markerDir.path}/update_pending.json');
+      file.writeAsStringSync(
+        '{"target_version":"1.2.3","channel":"stable","started_at_ms":42}',
+      );
+
+      final marker = UpdatePendingMarker.readAndClear();
+      expect(marker, isNotNull);
+      expect(marker?['target_version'], '1.2.3');
+      expect(marker?['channel'], 'stable');
+      expect(marker?['started_at_ms'], 42);
       expect(UpdatePendingMarker.readAndClear(), isNull);
     });
   });

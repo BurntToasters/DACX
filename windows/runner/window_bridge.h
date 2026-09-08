@@ -11,6 +11,9 @@ void RegisterPrimaryWindow(::FlutterWindow* window);
 
 void NotifyWindowDestroyed(::FlutterWindow* window);
 
+/// Restores and focuses the primary window (used by singleton activation).
+void ActivatePrimaryWindow();
+
 /// Registers run.rosie.dacx/window/methods for native window helpers
 /// (e.g. clearing WS_EX_LAYERED so acrylic/mica blur can work).
 void RegisterWindowMethodsChannel(flutter::BinaryMessenger* messenger,

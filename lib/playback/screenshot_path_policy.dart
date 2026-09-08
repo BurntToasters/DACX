@@ -38,4 +38,20 @@ abstract final class ScreenshotPathPolicy {
     final token = timestampToken(timestamp);
     return p.join(directory, '${baseName}_$token.$format');
   }
+
+  /// Avoids same-timestamp overwrites by appending `-2`, `-3`, …
+  static String uniqueOutputPath({
+    required String path,
+    required bool Function(String candidate) exists,
+  }) {
+    if (!exists(path)) return path;
+    final dir = p.dirname(path);
+    final ext = p.extension(path);
+    final stem = p.basenameWithoutExtension(path);
+    for (var i = 2; i < 1000; i++) {
+      final next = p.join(dir, '$stem-$i$ext');
+      if (!exists(next)) return next;
+    }
+    return path;
+  }
 }

@@ -263,6 +263,23 @@ void main() {
         expect(PlayerPathUtils.isUnsafeOpenPath('/tmp/file.mp3'), isFalse);
         expect(PlayerPathUtils.isUnsafeOpenPath(r'C:\media\a.mp3'), isFalse);
       });
+
+      test('rejects mpv protocol URIs and allows http(s) and file', () {
+        expect(PlayerPathUtils.isUnsafeOpenPath('lavfi://sine'), isTrue);
+        expect(PlayerPathUtils.isUnsafeOpenPath('ytdl://abc'), isTrue);
+        expect(PlayerPathUtils.isUnsafeOpenPath('edl://file.mp3'), isTrue);
+        expect(
+          PlayerPathUtils.isUnsafeOpenPath('https://example.com/a.mp3'),
+          isFalse,
+        );
+        expect(
+          PlayerPathUtils.isUnsafeOpenPath(
+            'https://user:pass@example.com/a.mp3',
+          ),
+          isTrue,
+        );
+        expect(PlayerPathUtils.isUnsafeOpenPath('file:///tmp/a.mp3'), isFalse);
+      });
     });
   });
 }

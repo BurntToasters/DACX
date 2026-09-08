@@ -81,7 +81,7 @@ class TransportControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final showVolumeSlider = screenWidth > 580;
+    final showVolumeSlider = screenWidth > 420;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),

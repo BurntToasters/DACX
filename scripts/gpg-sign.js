@@ -4,8 +4,10 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { execSync, spawnSync } from "child_process";
-import https from "https";
 import { fileURLToPath } from "url";
+import githubCli from "./github-cli.cjs";
+
+const { assertGitHubCliAuthenticated, githubApi, uploadReleaseAsset } = githubCli;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
@@ -18,7 +20,6 @@ const IS_PRERELEASE = /-(?:beta|alpha|rc)(?:[.-]?\d+)?/i.test(VERSION);
 
 const GPG_KEY_ID = process.env.GPG_KEY_ID;
 const GPG_PASSPHRASE = process.env.GPG_PASSPHRASE;
-const GH_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
 const REPO_OWNER = process.env.GH_REPO_OWNER || "BurntToasters";
 const REPO_NAME = process.env.GH_REPO_NAME || "Dacx";
 const TAG_DOWNLOAD_BASE_URL = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${encodeURIComponent(TAG)}`;
@@ -452,45 +453,7 @@ function signArtifacts(files) {
 // ── GitHub API ───────────────────────────────────────────────
 
 function ghRequest(method, endpoint, body) {
-  return new Promise((resolve, reject) => {
-    const opts = {
-      hostname: "api.github.com",
-      path: endpoint,
-      method,
-      headers: {
-        Authorization: `Bearer ${GH_TOKEN}`,
-        "User-Agent": "Dacx-Release",
-        Accept: "application/vnd.github.v3+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-    };
-    if (body) opts.headers["Content-Type"] = "application/json";
-
-    const req = https.request(opts, (res) => {
-      let data = "";
-      res.on("data", (c) => (data += c));
-      res.on("end", () => {
-        try {
-          const json = data ? JSON.parse(data) : {};
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(json);
-          } else {
-            const safe = json && typeof json.message === "string" ? json.message : "(error body omitted)";
-            reject(new Error(`GitHub ${res.statusCode}: ${safe}`));
-          }
-        } catch {
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(data);
-          } else {
-            reject(new Error(`GitHub ${res.statusCode}: non-JSON error response`));
-          }
-        }
-      });
-    });
-    req.on("error", reject);
-    if (body) req.write(JSON.stringify(body));
-    req.end();
-  });
+  return Promise.resolve(githubApi(method, endpoint, body));
 }
 
 async function getOrCreateRelease() {
@@ -522,59 +485,6 @@ async function getOrCreateRelease() {
   });
 }
 
-async function uploadAsset(uploadUrl, filePath) {
-  const fileName = path.basename(filePath);
-  const content = fs.readFileSync(filePath);
-  const url = new URL(uploadUrl.replace("{?name,label}", ""));
-  url.searchParams.set("name", fileName);
-
-  const isText = /\.(asc|txt|json)$/i.test(fileName);
-
-  await new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        hostname: url.hostname,
-        path: url.pathname + url.search,
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${GH_TOKEN}`,
-          "User-Agent": "Dacx-Release",
-          Accept: "application/vnd.github.v3+json",
-          "Content-Type": isText ? "text/plain" : "application/octet-stream",
-          "Content-Length": content.length,
-        },
-      },
-      (res) => {
-        let data = "";
-        res.on("data", (c) => (data += c));
-        res.on("end", () => {
-          if (res.statusCode < 300) {
-            resolve(true);
-          } else if (res.statusCode === 422) {
-            let detail = data;
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed && typeof parsed.message === "string") {
-                detail = parsed.message;
-              }
-            } catch {}
-            reject(
-              new Error(
-                `Upload ${fileName} was rejected (422): ${detail}. Remove the conflicting release asset and retry.`,
-              ),
-            );
-          } else {
-            reject(new Error(`Upload ${fileName} failed ${res.statusCode}: ${data}`));
-          }
-        });
-      },
-    );
-    req.on("error", reject);
-    req.write(content);
-    req.end();
-  });
-}
-
 async function listReleaseAssets(releaseId) {
   const assets = await ghRequest(
     "GET",
@@ -584,12 +494,12 @@ async function listReleaseAssets(releaseId) {
 }
 
 async function uploadAssetWithReplace(release, filePath) {
+  const releaseTag = release.tag_name || TAG;
   try {
-    await uploadAsset(release.upload_url, filePath);
+    uploadReleaseAsset(`${REPO_OWNER}/${REPO_NAME}`, releaseTag, filePath);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (!message.includes("(422)")) throw err;
-
+    if (err?.statusCode !== 422 && !/already[_ ]exists/i.test(message)) throw err;
     const fileName = path.basename(filePath);
     const assets = await listReleaseAssets(release.id);
     const existing = assets.find(
@@ -604,11 +514,7 @@ async function uploadAssetWithReplace(release, filePath) {
       );
     }
 
-    await ghRequest(
-      "DELETE",
-      `/repos/${REPO_OWNER}/${REPO_NAME}/releases/assets/${existing.id}`,
-    );
-    await uploadAsset(release.upload_url, filePath);
+    uploadReleaseAsset(`${REPO_OWNER}/${REPO_NAME}`, releaseTag, filePath, { clobber: true });
   }
 }
 
@@ -616,6 +522,7 @@ async function uploadAssetWithReplace(release, filePath) {
 
 async function main() {
   console.log(`\nDacx ${VERSION}: release pipeline\n`);
+  assertGitHubCliAuthenticated();
 
   console.log("[1/4] Checking GPG...");
   if (!GPG_KEY_ID) {
@@ -643,12 +550,6 @@ async function main() {
   for (const checksumFile of checksumFiles) {
     ascFiles.push(signFile(checksumFile));
     console.log(`  + ${path.basename(checksumFile)}.asc`);
-  }
-
-  if (!GH_TOKEN) {
-    console.log("\n[4/4] GH_TOKEN not set; skipping GitHub upload.");
-    console.log(`Artifacts staged in: ${releaseDir}\n`);
-    return;
   }
 
   console.log("[4/4] Uploading to GitHub...");

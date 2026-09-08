@@ -33,7 +33,12 @@ abstract final class UpdateLaunchPolicy {
     final targetVersion = marker['target_version'] as String?;
     if (targetVersion == null) return const UpdateLaunchNoticeDecision.none();
 
-    final startedAt = marker['started_at_ms'] as int?;
+    final startedRaw = marker['started_at_ms'];
+    final startedAt = startedRaw is int
+        ? startedRaw
+        : startedRaw is num
+        ? startedRaw.toInt()
+        : null;
     if (startedAt != null) {
       final ageMs = nowEpochMs - startedAt;
       if (ageMs > maxAge.inMilliseconds) {

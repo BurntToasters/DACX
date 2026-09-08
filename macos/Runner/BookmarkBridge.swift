@@ -90,23 +90,31 @@ final class BookmarkBridge {
         }
 
         let started = resolved.startAccessingSecurityScopedResource()
-        let token = UUID().uuidString
-        if started {
-            queue.sync { scopedURLs[token] = resolved }
+        if !started {
+            result(FlutterError(code: "BOOKMARK_ACCESS_DENIED",
+                                message: "Could not start security-scoped access",
+                                details: nil))
+            return
         }
+        let token = UUID().uuidString
+        queue.sync { scopedURLs[token] = resolved }
 
         var refreshed: String? = nil
         if isStale {
-            if let newData = try? resolved.bookmarkData(options: [.withSecurityScope],
+            do {
+                let newData = try resolved.bookmarkData(options: [.withSecurityScope],
                                                        includingResourceValuesForKeys: nil,
-                                                       relativeTo: nil) {
+                                                       relativeTo: nil)
                 refreshed = newData.base64EncodedString()
+            } catch {
+                os_log("bookmark refresh failed: %{public}@",
+                       log: bookmarkLog, type: .error, "\(error)")
             }
         }
 
         result([
             "path": resolved.path,
-            "token": started ? token : "",
+            "token": token,
             "stale": isStale,
             "refreshed": refreshed as Any,
         ])

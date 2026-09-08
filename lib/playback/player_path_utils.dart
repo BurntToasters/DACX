@@ -41,9 +41,12 @@ abstract final class PlayerPathUtils {
     'mpeg',
     'vob',
     'ogv',
+    'm3u8',
   };
 
   static const supportedExtensions = {...audioExtensions, ...videoExtensions};
+
+  static final _uriScheme = RegExp(r'^([a-zA-Z][a-zA-Z0-9+.-]*):');
 
   /// True for Windows UNC (`\\server\share\...`) or extended UNC (`\\?\UNC\...`).
   static bool isUncPath(String path) {
@@ -60,12 +63,30 @@ abstract final class PlayerPathUtils {
   }
 
   /// Rejects paths that must never be handed to the media engine from IPC /
-  /// Open With (UNC → NTLM / remote decoder surface).
+  /// Open With (UNC → NTLM / remote decoder surface, mpv protocol URIs).
   static bool isUnsafeOpenPath(String path) {
     final trimmed = path.trim();
     if (trimmed.isEmpty) return true;
     if (trimmed.contains('\x00')) return true;
     if (isUncPath(trimmed)) return true;
+    final schemeMatch = _uriScheme.firstMatch(trimmed);
+    if (schemeMatch != null) {
+      final scheme = schemeMatch.group(1)!.toLowerCase();
+      // Windows drive letter (`C:`) is a single-letter scheme.
+      if (scheme.length == 1) return false;
+      // `file:` is decoded by [normalizeDropPath] / [coerceOpenRequest].
+      if (scheme == 'file') return false;
+      // Stream URLs are opened via [PlayableSource.url], not mpv protocols.
+      if (scheme == 'http' || scheme == 'https') {
+        try {
+          if (Uri.parse(trimmed).userInfo.isNotEmpty) return true;
+        } catch (_) {
+          return true;
+        }
+        return false;
+      }
+      return true;
+    }
     return false;
   }
 
@@ -77,7 +98,10 @@ abstract final class PlayerPathUtils {
   /// Coerces platform bridge payloads to path plus optional native bookmark.
   static OpenFileRequest? coerceOpenRequest(Object? value) {
     if (value is String) {
-      final trimmed = value.trim();
+      final trimmed = PlayerPathUtils.normalizeDropPath(
+        value.trim(),
+        windows: Platform.isWindows,
+      ).trim();
       if (trimmed.isEmpty) return null;
       if (isUnsafeOpenPath(trimmed)) return null;
       return OpenFileRequest(path: trimmed);
@@ -85,7 +109,10 @@ abstract final class PlayerPathUtils {
     if (value is Map) {
       final rawPath = value['path'];
       if (rawPath is! String) return null;
-      final path = rawPath.trim();
+      final path = PlayerPathUtils.normalizeDropPath(
+        rawPath.trim(),
+        windows: Platform.isWindows,
+      ).trim();
       if (path.isEmpty) return null;
       if (isUnsafeOpenPath(path)) return null;
       final rawBookmark = value['bookmark'];

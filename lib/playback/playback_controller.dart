@@ -32,6 +32,7 @@ class PlaybackController {
 
   void dispose() {
     _disposed = true;
+    loadQueue.dispose();
     mediaSessionThrottle.reset();
     chapterGate.invalidate();
   }

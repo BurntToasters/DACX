@@ -7,9 +7,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../playback/playback_speed_policy.dart';
+import '../playback/playback_mix_policy.dart';
 import '../services/debug_log_service.dart';
 import '../services/hardware_acceleration_service.dart';
 import '../services/settings_service.dart';
+import '../services/bookmark_service.dart';
 import '../theme/glass_decorations.dart';
 import '../theme/window_visuals.dart';
 import '../services/update_service.dart';
@@ -282,7 +284,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   _experimentalTile(_windowBlurTile()),
                                   _experimentalTile(_windowBlurStrengthTile()),
                                 ],
-                                _experimentalTile(_multiAudioMixTile()),
+                                if (PlaybackMixPolicy.userFacingEnabled)
+                                  _experimentalTile(_multiAudioMixTile()),
                               ],
                               if (_s.debugModeEnabled) ...[
                                 const Divider(),
@@ -443,8 +446,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () async {
               final picked = await FilePicker.getDirectoryPath(
                 dialogTitle: l10n.settingsChooseScreenshotDir,
+                windowsOptions: const WindowsOptions(lockParentWindow: true),
+                linuxOptions: const LinuxOptions(lockParentWindow: true),
               );
               if (picked == null || !mounted) return;
+              final bookmark = await BookmarkService.createBookmark(picked);
+              if (bookmark != null && bookmark.isNotEmpty) {
+                _s.setFileBookmark(picked, bookmark);
+              }
               setState(() {
                 _s.screenshotDir = picked;
                 _log(
@@ -727,6 +736,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             Platform.isWindows
                 ? l10n.settingsBlurIntensityWindows
+                : Platform.isLinux
+                ? l10n.settingsBlurIntensityLinux
                 : l10n.settingsBlurIntensityMac,
           ),
           Slider(
@@ -771,6 +782,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Kept for when [PlaybackMixPolicy.userFacingEnabled] is restored.
   Widget _multiAudioMixTile() {
     final l10n = AppLocalizations.of(context);
     return SwitchListTile(

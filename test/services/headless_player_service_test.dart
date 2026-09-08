@@ -34,7 +34,7 @@ void main() {
 
     test('emitTracks updates currentTracks snapshot', () async {
       final service = HeadlessPlayerService();
-      final tracks = const Tracks(
+      const tracks = Tracks(
         audio: [AudioTrack('1', 'eng', null)],
         video: [],
         subtitle: [],
@@ -55,6 +55,16 @@ void main() {
 
       expect(states, const [true, false]);
       await sub.cancel();
+      await service.dispose();
+    });
+
+    test('stepFrame records forward and backward commands', () async {
+      final service = HeadlessPlayerService();
+
+      expect(await service.stepFrame(forward: true), isTrue);
+      expect(await service.stepFrame(forward: false), isTrue);
+
+      expect(service.frameStepCalls, [true, false]);
       await service.dispose();
     });
 

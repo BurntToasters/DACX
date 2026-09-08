@@ -25,7 +25,7 @@ void main() {
     });
 
     test('Linux D-Bus Inhibit reply shape is uint32 cookie', () async {
-      final response = DBusMethodSuccessResponse([DBusUint32(7)]);
+      final response = DBusMethodSuccessResponse(const [DBusUint32(7)]);
       expect(response.returnValues.single.asUint32(), 7);
       expect(DBusSignature('u'), response.returnValues.single.signature);
     });

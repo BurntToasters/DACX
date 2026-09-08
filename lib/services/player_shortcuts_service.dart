@@ -101,8 +101,8 @@ String shortcutActionLabel(PlayerShortcutAction a, {AppLocalizations? l10n}) {
     PlayerShortcutAction.toggleMute => 'Toggle mute',
     PlayerShortcutAction.toggleFullscreen => 'Toggle fullscreen',
     PlayerShortcutAction.exitFullscreen => 'Exit fullscreen',
-    PlayerShortcutAction.chapterNext => 'Next chapter',
-    PlayerShortcutAction.chapterPrev => 'Previous chapter',
+    PlayerShortcutAction.chapterNext => 'Next chapter / video frame',
+    PlayerShortcutAction.chapterPrev => 'Previous chapter / video frame',
     PlayerShortcutAction.screenshot => 'Save screenshot',
     PlayerShortcutAction.cycleAudioTrack => 'Cycle audio track',
     PlayerShortcutAction.cycleSubtitleTrack => 'Cycle subtitle track',
@@ -262,11 +262,15 @@ class PlayerShortcutsService {
       return PlayerShortcutAction.toggleEqualizer;
     }
     if (key == LogicalKeyboardKey.arrowRight) {
-      if (primaryModifierPressed) return PlayerShortcutAction.chapterNext;
+      if (primaryModifierPressed) {
+        return event is KeyDownEvent ? PlayerShortcutAction.chapterNext : null;
+      }
       return PlayerShortcutAction.seekForward;
     }
     if (key == LogicalKeyboardKey.arrowLeft) {
-      if (primaryModifierPressed) return PlayerShortcutAction.chapterPrev;
+      if (primaryModifierPressed) {
+        return event is KeyDownEvent ? PlayerShortcutAction.chapterPrev : null;
+      }
       return PlayerShortcutAction.seekBack;
     }
     if (key == LogicalKeyboardKey.arrowUp) {

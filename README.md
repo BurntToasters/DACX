@@ -55,7 +55,7 @@ Dacx is a lightweight desktop music and video player focused on speed and low ov
 - Playback speed control (transport chip + `[` / `]` / `\` shortcuts).
 - External audio / subtitle track load from the more menu.
 - 10-band equalizer with presets.
-- Optional multi-audio-track mixing via `lavfi-complex` (Experimental Features; unstable).
+- Experimental Features (off by default): unfinished ideas such as Linux compositor blur. Multi-audio mix is implemented but withdrawn from the UI until linked libmpv has `amix`/`aformat` on every platform (`docs/ideas/multi-audio-mix.md`).
 - Optional seek thumbnails (Playback settings; uses extra memory).
 - Window transparency / background blur on Windows and macOS (Appearance settings). Linux compositor blur remains experimental.
 - Resume a file from its previous position when you reopen it; relaunch starts at the empty home screen.
@@ -63,15 +63,15 @@ Dacx is a lightweight desktop music and video player focused on speed and low ov
 - System media-session integration: lock-screen / Now Playing / SMTC / MPRIS controls, artwork, rate, and scrubbing.
 - File associations + custom document icon on Windows, macOS, and Linux.
 - Built-in update checker: in-app self-update on **Windows (MSI)** and **macOS** (`/Applications`). On **Linux**, prefer the **AppImage** managed with [AppManager](https://github.com/kem-a/AppManager) for install + updates (no in-app Linux installer).
-- Notarized & signed DMG/ZIP for macOS; Windows/Linux packages carry **GPG** detached signatures. Windows MSI is not Authenticode-signed by default (SmartScreen may warn); optional Authenticode is a release-machine concern (see `SECURITY.md`).
+- Notarized & signed DMG/ZIP for macOS. Official Windows MSIs are Authenticode-signed with Azure Artifact Signing (SmartScreen still may warn on first run). Linux packages carry **GPG** detached signatures. See `SECURITY.md`.
 
 ## Support contract (v1 readiness)
 
 - **UI language:** English only (`lib/l10n`).
 - **macOS:** 15 (Sequoia) or newer.
 - **CPU arch:** Windows/Linux ship **x64** only (arm64 not a priority).
-- **Linux (recommended):** [AppImage](https://github.com/BurntToasters/Dacx/releases/latest/download/Dacx-Linux-x86_64.AppImage) + [AppManager](https://github.com/kem-a/AppManager) for desktop install and updates. deb/rpm/Flatpak/tar remain available; Flatpak is GitHub-sideload only (not Flathub).
-- **Experimental Features:** Long-lived opt-in lane (off by default) for unfinished / in-progress ideas (multi-audio mix, Linux compositor blur, …). Features may graduate to stable settings (like Win/mac blur) or stay experimental indefinitely; not a blocker for `1.0`.
+- **Linux (recommended):** [AppImage](https://github.com/BurntToasters/Dacx/releases/latest/download/Dacx-Linux-x86_64.AppImage) + [AppManager](https://github.com/kem-a/AppManager) for desktop install and updates. **AppImage / tar / Flatpak bundle libmpv.** deb/rpm declare a distro `libmpv` dependency instead. **Flatpak** is GitHub-sideload only (not Flathub).
+- **Experimental Features:** Long-lived opt-in lane (off by default) for unfinished / in-progress ideas (Linux compositor blur, …). Multi-audio mix stays in code but is not user-facing. Features may graduate to stable settings (like Win/mac blur) or stay experimental indefinitely; not a blocker for `1.0`.
 - **Windows portable ZIP:** No longer shipped; use the MSI.
 
 ## Development
@@ -108,7 +108,7 @@ This means:
   ```bash
   DACX_BUILD_DEV_NO_TEAM_ID=1 npm run build:mac
   ```
-- `scripts/flutter-build-windows.js` accepts `WINDOWS_SIGNING_CERT_THUMBPRINT` (or `DACX_WINDOWS_SIGNER_THUMBPRINT`). In official release builds, the MSI is fully signed using Azure Artifact Signing and the thumbprint is baked in as a runtime pin. On **release VMs**, set the thumbprint and `DACX_REQUIRE_WINDOWS_SIGNER=1` so `npm run build:win` fails if it is missing (see `SECURITY.md`). The Windows build also ships `dacx-update-helper.exe` next to `dacx.exe` for post-exit MSI install (no on-disk PowerShell watchdog scripts).
+- `scripts/flutter-build-windows.js` signs official MSIs with Azure Artifact Signing when `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, `AZURE_ARTIFACT_SIGNING_PROFILE`, and `AZURE_ARTIFACT_SIGNING_PUBLISHER` are set. The publisher string is baked in as `--dart-define=DACX_WINDOWS_SIGNER_PUBLISHER=...`. Set `SKIP_WIN_CODESIGN=1` for local unsigned builds. The Windows build also ships `dacx-update-helper.exe` next to `dacx.exe` for post-exit MSI install.
 - `scripts/flutter-build-linux` is not affected by either.
 
 ### macOS support

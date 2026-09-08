@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -380,6 +379,72 @@ void main() {
     expect(find.byTooltip('Play'), findsOneWidget);
   });
 
+  testWidgets('space shortcut still works after focus is cleared', (
+    tester,
+  ) async {
+    PlayerScreenHarness.configureDesktopViewport(tester);
+    final services = await PlayerScreenHarness.createServices();
+    final player = HeadlessPlayerService();
+
+    await tester.pumpWidget(
+      PlayerScreenHarness.wrap(
+        settings: services.settings,
+        debugLog: services.debugLog,
+        updates: services.updates,
+        playerService: player,
+        headlessMediaSurface: true,
+        initialLoadedSource: PlayableSource.file('/test/song.mp3'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    FocusManager.instance.primaryFocus?.unfocus(
+      disposition: UnfocusDisposition.previouslyFocusedChild,
+    );
+    FocusManager.instance.rootScope.unfocus();
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+
+    expect(player.playPauseInvocations, 1);
+  });
+
+  testWidgets('space shortcut still works after tapping transport controls', (
+    tester,
+  ) async {
+    PlayerScreenHarness.configureDesktopViewport(tester);
+    final services = await PlayerScreenHarness.createServices();
+    final player = HeadlessPlayerService();
+
+    await tester.pumpWidget(
+      PlayerScreenHarness.wrap(
+        settings: services.settings,
+        debugLog: services.debugLog,
+        updates: services.updates,
+        playerService: player,
+        headlessMediaSurface: true,
+        initialLoadedSource: PlayableSource.file('/test/song.mp3'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    player.emitPlaying(true);
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Pause'));
+    await tester.pump();
+
+    final afterTap = player.playPauseInvocations;
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+
+    expect(player.playPauseInvocations, afterTap + 1);
+  });
+
   testWidgets('space shortcut is ignored when no media is loaded', (
     tester,
   ) async {
@@ -600,6 +665,9 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    player.emitPlaying(true);
+    await tester.pump();
+
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
@@ -784,10 +852,10 @@ void main() {
 
     player.emitTracks(tracks);
     player.emitTrack(
-      Track(
-        audio: const AudioTrack('eng', 'English', null),
-        video: const VideoTrack('auto', 'auto', null),
-        subtitle: const SubtitleTrack('eng', 'English', null),
+      const Track(
+        audio: AudioTrack('eng', 'English', null),
+        video: VideoTrack('auto', 'auto', null),
+        subtitle: SubtitleTrack('eng', 'English', null),
       ),
     );
     await tester.pump();
@@ -1267,7 +1335,7 @@ void main() {
     PlayerScreenHarness.configureDesktopViewport(tester);
     final services = await PlayerScreenHarness.createServices();
     final player = HeadlessPlayerService()
-      ..failProperties(const ['audio-files-add']);
+      ..failProperties(const ['audio-files-append']);
     PlayerScreenHarness.filePickerPaths = ['/media/extra.flac'];
 
     await tester.pumpWidget(
@@ -1666,6 +1734,7 @@ void main() {
     await tester.pump();
 
     await player.setChapter(1);
+    player.emitPlaying(true);
     await tester.pump();
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
@@ -1747,8 +1816,7 @@ void main() {
 
     expect(
       PlayerScreenHarness.windowMethodsCalls.map((c) => c.method),
-      contains('openNewWindow'),
-      skip: Platform.isMacOS ? false : 'macOS uses in-process window bridge',
+      isNot(contains('openNewWindow')),
     );
   });
 
@@ -1800,6 +1868,9 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    player.emitPlaying(true);
+    await tester.pump();
+
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
@@ -1835,6 +1906,7 @@ void main() {
     await tester.pump();
 
     await player.setChapter(1);
+    player.emitPlaying(true);
     await tester.pump();
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
@@ -1956,7 +2028,7 @@ void main() {
     expect(player.openCalls.map((c) => c.path), contains(recentUrl));
   });
 
-  testWidgets('ctrl arrow shortcuts are ignored when no chapters exist', (
+  testWidgets('ctrl/cmd arrows step paused video backward and forward', (
     tester,
   ) async {
     PlayerScreenHarness.configureDesktopViewport(tester);
@@ -1983,16 +2055,77 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(await player.getProperty('chapter'), isNull);
-    expect(find.textContaining('Chapter:'), findsNothing);
+    expect(player.frameStepCalls, [true]);
 
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(await player.getProperty('chapter'), isNull);
+    expect(player.frameStepCalls, [true, false]);
     expect(find.textContaining('Chapter:'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(player.playPauseInvocations, 1);
+  });
+
+  testWidgets('ctrl arrow key repeat does not frame-step twice', (
+    tester,
+  ) async {
+    PlayerScreenHarness.configureDesktopViewport(tester);
+    final services = await PlayerScreenHarness.createServices();
+    final player = HeadlessPlayerService();
+
+    await tester.pumpWidget(
+      PlayerScreenHarness.wrap(
+        settings: services.settings,
+        debugLog: services.debugLog,
+        updates: services.updates,
+        playerService: player,
+        headlessMediaSurface: true,
+        initialLoadedSource: PlayableSource.file('/test/movie.mkv'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(player.frameStepCalls, [true]);
+  });
+
+  testWidgets('ctrl arrow does not frame-step paused audio', (tester) async {
+    PlayerScreenHarness.configureDesktopViewport(tester);
+    final services = await PlayerScreenHarness.createServices();
+    final player = HeadlessPlayerService();
+
+    await tester.pumpWidget(
+      PlayerScreenHarness.wrap(
+        settings: services.settings,
+        debugLog: services.debugLog,
+        updates: services.updates,
+        playerService: player,
+        headlessMediaSurface: true,
+        initialLoadedSource: PlayableSource.file('/test/song.mp3'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(player.frameStepCalls, isEmpty);
   });
 
   testWidgets('shift n does not advance past last item when loop is off', (
@@ -2488,15 +2621,14 @@ void main() {
     await mediaCommands.close();
   });
 
-  testWidgets('failed audio mix reverts toggle and shows feedback', (
+  testWidgets('multi-audio mix is not offered in the more menu', (
     tester,
   ) async {
     PlayerScreenHarness.configureDesktopViewport(tester);
     final services = await PlayerScreenHarness.createServices(
-      prefs: {'experimental_features_enabled': true},
+      prefs: {'experimental_features_enabled': true, 'multi_audio_mix': true},
     );
-    final player = HeadlessPlayerService()
-      ..failProperties(const ['lavfi-complex']);
+    final player = HeadlessPlayerService();
 
     await tester.pumpWidget(
       PlayerScreenHarness.wrap(
@@ -2525,16 +2657,8 @@ void main() {
 
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Mix all audio tracks'));
-    await tester.pumpAndSettle();
 
+    expect(find.text('Mix all audio tracks (Experimental)'), findsNothing);
     expect(services.settings.multiAudioMix, isFalse);
-    expect(find.text('Could not enable audio mix'), findsWidgets);
-    expect(
-      player.propertyCalls.where(
-        (call) => call.name == 'lavfi-complex' && call.value.isNotEmpty,
-      ),
-      isNotEmpty,
-    );
   });
 }

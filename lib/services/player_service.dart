@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:media_kit/media_kit.dart';
 
+import '../playback/player_path_utils.dart';
+
 /// Playback API surface used by [PlayerScreen] and related services.
 abstract class IPlayerService {
   bool get isDisposed;
@@ -25,6 +27,7 @@ abstract class IPlayerService {
   Future<void> playPause();
   Future<void> stop();
   Future<void> seek(Duration position);
+  Future<bool> stepFrame({required bool forward});
   Future<void> setVolume(double volume);
   Future<void> setRate(double rate);
   Future<void> setPlaylistMode(PlaylistMode mode);
@@ -115,7 +118,16 @@ class PlayerService implements IPlayerService {
   @override
   Future<void> open(String filePath, {bool play = true}) async {
     if (_disposed) return;
-    await player.open(Media(filePath), play: play);
+    try {
+      await player.open(Media(filePath), play: play);
+    } catch (e, st) {
+      if (_disposed) return;
+      if (!_errorController.isClosed) {
+        _errorController.add(PlayerErrorEvent('open', e, st));
+      }
+      rethrow;
+    }
+    if (_disposed) return;
   }
 
   @override
@@ -133,6 +145,21 @@ class PlayerService implements IPlayerService {
   @override
   Future<void> seek(Duration position) =>
       _guard('seek', () => player.seek(position));
+
+  @override
+  Future<bool> stepFrame({required bool forward}) async {
+    return await _guardValue<bool>('stepFrame', () async {
+          final platform = player.platform;
+          if (platform is NativePlayer) {
+            await platform.command([
+              forward ? 'frame-step' : 'frame-back-step',
+            ]);
+            return true;
+          }
+          return false;
+        }) ??
+        false;
+  }
 
   @override
   Future<void> setVolume(double volume) =>
@@ -223,12 +250,16 @@ class PlayerService implements IPlayerService {
   }
 
   @override
-  Future<bool> addExternalAudio(String path) =>
-      setProperty('audio-files-add', path);
+  Future<bool> addExternalAudio(String path) {
+    if (PlayerPathUtils.isUnsafeOpenPath(path)) return Future.value(false);
+    return setProperty('audio-files-append', path);
+  }
 
   @override
-  Future<bool> addExternalSubtitle(String path) =>
-      setProperty('sub-files-add', path);
+  Future<bool> addExternalSubtitle(String path) {
+    if (PlayerPathUtils.isUnsafeOpenPath(path)) return Future.value(false);
+    return setProperty('sub-files-append', path);
+  }
 
   @override
   Future<void> dispose() async {

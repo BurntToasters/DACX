@@ -27,6 +27,8 @@ void main() {
         lastEqEnabled: false,
         lastEqBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         lastHwDec: 'auto',
+        lastSeekPreviewEnabled: false,
+        lastOsdEnabled: true,
       );
 
       final (delta, next) = PlayerSettingsSync.diff(
@@ -81,7 +83,7 @@ void main() {
       expect(delta.audioFilters, isTrue);
     });
 
-    test('detects experimental multi-audio mix toggle', () async {
+    test('stored mix pref does not apply while mix is withdrawn', () async {
       final settings = await settingsWith({
         'experimental_features_enabled': true,
         'multi_audio_mix': true,
@@ -93,8 +95,9 @@ void main() {
         settings: settings,
       );
 
-      expect(delta.multiAudioMix, isTrue);
-      expect(next.lastMultiAudioMix, isTrue);
+      // Mix is withdrawn from the UI; stored prefs must not apply a graph.
+      expect(delta.multiAudioMix, isFalse);
+      expect(next.lastMultiAudioMix, isFalse);
     });
 
     test('detects always-on-top toggle', () async {

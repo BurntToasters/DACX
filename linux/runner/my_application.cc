@@ -170,6 +170,13 @@ static void dacx_dispatch_pending_to_dart(MyApplication* self) {
   g_ptr_array_set_size(self->pending_open_files, 0);
 }
 
+static gchar* dacx_file_path_or_uri(GFile* file) {
+  if (file == nullptr) return nullptr;
+  gchar* path = g_file_get_path(file);
+  if (path != nullptr) return path;
+  return g_file_get_uri(file);
+}
+
 static void dacx_handle_open_path(MyApplication* self, const gchar* path) {
   if (path == nullptr || *path == '\0') return;
   if (self->pending_open_files == nullptr) {
@@ -390,7 +397,7 @@ static void my_application_open(GApplication* application, GFile** files,
   // with the file path baked in.
   if (g_hash_table_size(self->registrations) == 0) {
     if (n_files > 0 && files != nullptr) {
-      g_autofree gchar* path = g_file_get_path(files[0]);
+      g_autofree gchar* path = dacx_file_path_or_uri(files[0]);
       if (path != nullptr) {
         char** next_args = g_new0(char*, 2);
         next_args[0] = g_strdup(path);
@@ -405,7 +412,7 @@ static void my_application_open(GApplication* application, GFile** files,
     gtk_window_present(window);
     for (gint i = 1; i < n_files; i++) {
       if (files[i] == nullptr) continue;
-      g_autofree gchar* extra_path = g_file_get_path(files[i]);
+      g_autofree gchar* extra_path = dacx_file_path_or_uri(files[i]);
       if (extra_path != nullptr) {
         dacx_handle_open_path(self, extra_path);
       }
@@ -415,7 +422,7 @@ static void my_application_open(GApplication* application, GFile** files,
 
   for (gint i = 0; i < n_files; i++) {
     if (files[i] == nullptr) continue;
-    g_autofree gchar* path = g_file_get_path(files[i]);
+    g_autofree gchar* path = dacx_file_path_or_uri(files[i]);
     if (path != nullptr) {
       dacx_handle_open_path(self, path);
     }

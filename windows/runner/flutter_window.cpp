@@ -28,8 +28,9 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  dacx::RegisterPrimaryWindow(this);
   dacx::RegisterMediaSession(
-      flutter_controller_->engine()->messenger());
+      flutter_controller_->engine()->messenger(), GetHandle());
   dacx::StartOpenFileServer(flutter_controller_->engine()->messenger());
   dacx::RegisterWindowMethodsChannel(
       flutter_controller_->engine()->messenger(), this);

@@ -51,17 +51,20 @@ class MediaSessionService {
       return;
     }
     if (Platform.isLinux) {
-      try {
-        _mpris = _MprisAdapter(_dispatchCommand, debugLog);
-      } catch (e) {
-        _platformAvailable = false;
-        debugLog.log(
-          category: DebugLogCategory.system,
-          event: 'media_session_mpris_init_failed',
-          message: e.toString(),
-          severity: DebugSeverity.warn,
-        );
-      }
+      runZonedGuarded(
+        () {
+          _mpris = _MprisAdapter(_dispatchCommand, debugLog);
+        },
+        (e, st) {
+          _platformAvailable = false;
+          debugLog.log(
+            category: DebugLogCategory.system,
+            event: 'media_session_mpris_init_failed',
+            message: e.toString(),
+            severity: DebugSeverity.warn,
+          );
+        },
+      );
       return;
     }
     _channel.setMethodCallHandler(_handleNativeCall);
@@ -88,6 +91,7 @@ class MediaSessionService {
     String? album,
     Duration? duration,
     String? artUri,
+    String? trackIdentity,
   }) async {
     if (!_enabled || !_platformAvailable) return;
     _lastTitle = title;
@@ -99,6 +103,7 @@ class MediaSessionService {
         album: album,
         duration: _lastDuration,
         artUri: artUri,
+        trackIdentity: trackIdentity ?? title,
       );
       return;
     }
@@ -239,12 +244,14 @@ class _MprisAdapter extends MPRISService {
         'dacx',
         identity: 'DACX',
         desktopEntry: IdleInhibitService.mprisDesktopEntry(),
-        emitSeekedSignal: true,
+        emitSeekedSignal: false,
         canPlay: true,
         canPause: true,
         canGoNext: true,
         canGoPrevious: true,
         canSeek: true,
+        canRaise: true,
+        canQuit: true,
         supportLoopStatus: true,
         supportShuffle: true,
       );
@@ -263,9 +270,11 @@ class _MprisAdapter extends MPRISService {
     String? album,
     Duration? duration,
     String? artUri,
+    String? trackIdentity,
   }) {
     if (!_enabled) return;
-    final id = '/run/rosie/dacx/track/${title.hashCode.toUnsigned(31)}';
+    final key = (trackIdentity ?? title).hashCode.toUnsigned(31);
+    final id = '/run/rosie/dacx/track/$key';
     metadata = Metadata(
       trackId: id,
       trackTitle: title,
@@ -283,7 +292,10 @@ class _MprisAdapter extends MPRISService {
   }
 
   void clear() {
-    metadata = Metadata(trackId: '/', trackTitle: '');
+    metadata = Metadata(
+      trackId: '/org/mpris/MediaPlayer2/TrackList/NoTrack',
+      trackTitle: '',
+    );
     playbackStatus = PlaybackStatus.stopped;
   }
 
@@ -305,6 +317,12 @@ class _MprisAdapter extends MPRISService {
   @override
   Future<void> onStop() async =>
       _dispatch(const MediaSessionCommand('stop', null));
+  @override
+  Future<void> onRaise() async =>
+      _dispatch(const MediaSessionCommand('raise', null));
+  @override
+  Future<void> onQuit() async =>
+      _dispatch(const MediaSessionCommand('quit', null));
   @override
   Future<void> onSeek(int offset) async =>
       _dispatch(MediaSessionCommand('seek_relative', offset ~/ 1000));

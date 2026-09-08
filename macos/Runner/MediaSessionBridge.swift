@@ -24,6 +24,12 @@ final class MediaSessionBridge {
   private var commandsConfigured = false
   private var playbackRate: Double = 1.0
 
+  private func intValue(_ value: Any?) -> Int? {
+    if let n = value as? NSNumber { return n.intValue }
+    if let i = value as? Int { return i }
+    return nil
+  }
+
   deinit {
     let task = stateQueue.sync { artworkTask }
     task?.cancel()
@@ -116,10 +122,10 @@ final class MediaSessionBridge {
       if let album = args["album"] as? String, !album.isEmpty {
         info[MPMediaItemPropertyAlbumTitle] = album
       }
-      if let durMs = args["durationMs"] as? Int, durMs > 0 {
+      if let durMs = intValue(args["durationMs"]), durMs > 0 {
         info[MPMediaItemPropertyPlaybackDuration] = Double(durMs) / 1000.0
       }
-      if let posMs = args["positionMs"] as? Int {
+      if let posMs = intValue(args["positionMs"]) {
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = Double(posMs) / 1000.0
       }
       var playingFlag: Bool? = nil

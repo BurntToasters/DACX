@@ -12,7 +12,6 @@ if (!['win', 'mac', 'linux'].includes(target)) {
   process.exit(1);
 }
 
-// Helpers
 function run(cmd, opts = {}) {
   console.log(`\n▶ ${cmd}`);
   try {
@@ -220,6 +219,7 @@ function setupLinux() {
     'libgtk-3-dev', 'libepoxy-dev', 'libmpv-dev', 'mpv',
     'libayatana-appindicator3-dev',
     'libunwind-dev',
+    'patchelf',
     'curl', 'git', 'unzip', 'xz-utils', 'zip',
     'flatpak', 'flatpak-builder',
   ];

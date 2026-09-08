@@ -60,5 +60,16 @@ void main() {
         expect(b, contains('14-30-45-002'));
       },
     );
+
+    test('uniqueOutputPath appends -2 when the candidate exists', () {
+      final existing = {'/tmp/clip.png'};
+      expect(
+        ScreenshotPathPolicy.uniqueOutputPath(
+          path: '/tmp/clip.png',
+          exists: existing.contains,
+        ),
+        p.join('/tmp', 'clip-2.png'),
+      );
+    });
   });
 }

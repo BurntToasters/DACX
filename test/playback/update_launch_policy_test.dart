@@ -67,5 +67,14 @@ void main() {
       );
       expect(decision.kind, UpdateLaunchNoticeKind.success);
     });
+
+    test('coerces jsonDecode num started_at_ms', () {
+      final decision = UpdateLaunchPolicy.decide(
+        marker: {'target_version': '0.10.0', 'started_at_ms': now.toDouble()},
+        nowEpochMs: now,
+        actualVersion: '0.10.0',
+      );
+      expect(decision.kind, UpdateLaunchNoticeKind.success);
+    });
   });
 }
