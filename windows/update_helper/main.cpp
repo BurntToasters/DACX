@@ -34,7 +34,11 @@
 
 #include <windows.h>
 #include <bcrypt.h>
+#include <knownfolders.h>
+#include <objbase.h>
 #include <shellapi.h>
+#include <shlobj.h>
+#include <shobjidl.h>
 #include <wincrypt.h>
 #include <wintrust.h>
 #include <softpub.h>
@@ -50,6 +54,7 @@
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "ole32.lib")
 
 namespace {
 
@@ -372,6 +377,108 @@ std::wstring DefaultExeBesideHelper() {
   return path.substr(0, slash + 1) + L"dacx.exe";
 }
 
+std::wstring CanonicalPath(const std::wstring& path) {
+  wchar_t full[MAX_PATH];
+  const DWORD n = GetFullPathNameW(path.c_str(), MAX_PATH, full, nullptr);
+  if (n == 0 || n >= MAX_PATH) return path;
+  wchar_t lng[MAX_PATH];
+  const DWORD m = GetLongPathNameW(full, lng, MAX_PATH);
+  if (m == 0 || m >= MAX_PATH) return std::wstring(full);
+  return std::wstring(lng);
+}
+
+bool SamePath(const std::wstring& a, const std::wstring& b) {
+  return _wcsicmp(CanonicalPath(a).c_str(), CanonicalPath(b).c_str()) == 0;
+}
+
+void NotifyShellExeChanged(const std::wstring& exe_path) {
+  if (exe_path.empty()) return;
+  SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSHNOWAIT,
+                 exe_path.c_str(), nullptr);
+}
+
+void RefreshLinksInDir(const std::wstring& dir, const std::wstring& exe_path) {
+  const std::wstring glob = dir + L"\\*.lnk";
+  WIN32_FIND_DATAW fd{};
+  HANDLE find = FindFirstFileW(glob.c_str(), &fd);
+  if (find == INVALID_HANDLE_VALUE) return;
+
+  do {
+    if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) continue;
+    const std::wstring lnk = dir + L"\\" + fd.cFileName;
+
+    IShellLinkW* link = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                  IID_PPV_ARGS(&link));
+    if (FAILED(hr) || link == nullptr) continue;
+
+    IPersistFile* persist = nullptr;
+    hr = link->QueryInterface(IID_PPV_ARGS(&persist));
+    if (FAILED(hr) || persist == nullptr) {
+      link->Release();
+      continue;
+    }
+    hr = persist->Load(lnk.c_str(), STGM_READWRITE);
+    if (FAILED(hr)) {
+      persist->Release();
+      link->Release();
+      continue;
+    }
+
+    wchar_t target[MAX_PATH] = {};
+    hr = link->GetPath(target, MAX_PATH, nullptr, SLGP_RAWPATH);
+    if (FAILED(hr) || target[0] == L'\0' || !SamePath(target, exe_path)) {
+      persist->Release();
+      link->Release();
+      continue;
+    }
+
+    link->SetIconLocation(exe_path.c_str(), -101);
+    hr = persist->Save(nullptr, TRUE);
+    persist->Release();
+    link->Release();
+    if (SUCCEEDED(hr)) {
+      SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSHNOWAIT,
+                     lnk.c_str(), nullptr);
+      LogLine(L"refreshed pin icon " + lnk);
+    }
+  } while (FindNextFileW(find, &fd));
+  FindClose(find);
+}
+
+void RefreshChildShortcutDirs(const std::wstring& dir,
+                              const std::wstring& exe_path) {
+  WIN32_FIND_DATAW fd{};
+  HANDLE find = FindFirstFileW((dir + L"\\*").c_str(), &fd);
+  if (find == INVALID_HANDLE_VALUE) return;
+  do {
+    if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) continue;
+    if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) {
+      continue;
+    }
+    RefreshLinksInDir(dir + L"\\" + fd.cFileName, exe_path);
+  } while (FindNextFileW(find, &fd));
+  FindClose(find);
+}
+
+void RefreshPinnedShortcuts(const std::wstring& exe_path) {
+  if (exe_path.empty()) return;
+  PWSTR appdata = nullptr;
+  if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr,
+                                  &appdata)) ||
+      appdata == nullptr) {
+    return;
+  }
+  const std::wstring root = std::wstring(appdata) +
+                            L"\\Microsoft\\Internet Explorer\\Quick Launch\\"
+                            L"User Pinned";
+  CoTaskMemFree(appdata);
+  RefreshLinksInDir(root + L"\\TaskBar", exe_path);
+  const std::wstring implicit = root + L"\\ImplicitAppShortcuts";
+  RefreshLinksInDir(implicit, exe_path);
+  RefreshChildShortcutDirs(implicit, exe_path);
+}
+
 void RelaunchDacx(const std::wstring& exe_path) {
   if (exe_path.empty()) {
     LogLine(L"relaunch skipped: empty exe path");
@@ -478,10 +585,14 @@ int Run(int argc, wchar_t** argv) {
 
   LogLine(L"launching msiexec");
   const int msi_rc = LaunchMsiexec(args.msi);
-  if (args.relaunch && MsiexecSucceeded(msi_rc)) {
+  if (MsiexecSucceeded(msi_rc)) {
     std::wstring exe = args.exe;
     if (exe.empty()) exe = DefaultExeBesideHelper();
-    RelaunchDacx(exe);
+    NotifyShellExeChanged(exe);
+    RefreshPinnedShortcuts(exe);
+    if (args.relaunch) {
+      RelaunchDacx(exe);
+    }
   }
   return msi_rc;
 }
@@ -489,9 +600,13 @@ int Run(int argc, wchar_t** argv) {
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
+  const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
   int argc = 0;
   LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-  if (argv == nullptr) return 99;
+  if (argv == nullptr) {
+    if (SUCCEEDED(com)) CoUninitialize();
+    return 99;
+  }
   int rc = 99;
   try {
     rc = Run(argc, argv);
@@ -500,5 +615,6 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     rc = 99;
   }
   LocalFree(argv);
+  if (SUCCEEDED(com)) CoUninitialize();
   return rc;
 }

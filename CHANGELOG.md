@@ -1,19 +1,15 @@
 > [!NOTE]
 > 🅱️ This is a Beta build.
 
-> [!IMPORTANT]
-> **Windows users updating from `v0.11.0` or `v0.11.1-beta.1`: the in-app installer in those versions is broken.**
-> When the update fails, choose **Open release page**, download the `v0.11.1` x64 MSI, and run it manually once. In-app updates work again after `v0.11.1` is installed.
-
 # ⬇️ Downloads
 
 | <img height="20" src="https://raw.githubusercontent.com/BurntToasters/bcls/main/media/windows.png" /> Windows | <img height="20" src="https://raw.githubusercontent.com/BurntToasters/bcls/main/media/mac.png" /> macOS | <img height="20" src="https://raw.githubusercontent.com/BurntToasters/bcls/main/media/linux.png" /> Linux |
 | :--- | :--- | :--- |
-| **MSI:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.3/Dacx-Windows-x64.msi) | **[Universal DMG](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.3/Dacx-macOS.dmg)** | **AppImage:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.3/Dacx-Linux-x86_64.AppImage) |
-| | **[Universal ZIP](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.3/Dacx-macOS.zip)** | **DEB:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.3/Dacx-Linux-amd64.deb) |
-| | | **RPM:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.3/Dacx-Linux-x86_64.rpm) |
-| | | **Flatpak:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.3/Dacx-Linux-x86_64.flatpak) |
-| | | **TAR (Generic Linux):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.3/Dacx-Linux-x86_64.tar.gz) |
+| **MSI:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Windows-x64.msi) | **[Universal DMG](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-macOS.dmg)** | **AppImage:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Linux-x86_64.AppImage) |
+| | **[Universal ZIP](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-macOS.zip)** | **DEB (Deprecated):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Linux-amd64.deb) |
+| | | **RPM (Deprecated):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Linux-x86_64.rpm) |
+| | | **Flatpak:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Linux-x86_64.flatpak) |
+| | | **TAR (Generic Linux):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Linux-x86_64.tar.gz) |
 
 > [!IMPORTANT]
 > The `.asc` files are my normal GPG signatures which you can verify using my GPG Public Key: https://tuxedo.rosie.run/GPG/BurntToasters_0xF2FBC20F_public.asc.
@@ -21,6 +17,17 @@
 > ⚠️ Arm64 Linux and Windows Binaries are NOT available at the moment. Its something I may get around to in the future but its not a priority.
 
 ### ℹ️ Enjoying Dacx? Consider [❤️ Supporting Me! ❤️](https://rosie.run/support)
+
+## Changes in `v0.11.2-beta.4:`
+- **Flutter:** Updated flutter to `3.47.2`.
+- **DEB/RPM Binaries:** DEB and RPM binaries are now deprecated. In this modern era of linux, users don't usually sideload `deb` or especially `rpm` binaries anymore. AppImage and Flatpak are more favorable due to their universal compatibility with distros.
+  - `DEB` and `RPM` binaries will still be available as of now, but they are officially deprecated and may be removed in the future.
+- **Fix - Windows taskbar icon after update:** After an MSI upgrade, a pinned Dacx could show the generic document glyph until unpin/re-pin. The updater now refreshes Explorer and existing taskbar shortcuts; the window sets relaunch icon properties. The Start Menu shortcut no longer uses the MSI Icon table (pins resolve from `dacx.exe`). Add/Remove Programs still uses `ARPPRODUCTICON`.
+- **Fix - Test suite green on load failures:** `test-all` no longer treats `flutter test` as passed when files fail to compile/load or the log never prints `All tests passed`. The coverage gate is skipped when tests already failed.
+- **Fix - Pending-update snackbar JSON:** `UpdatePendingMarker.readAndClear` accepts the `Map` `jsonDecode` actually returns.
+- **Fix - Credential stream URLs:** Open With / IPC no longer treats `http(s)` URLs with embedded userinfo as local files.
+- **Fix - Open With window targeting:** A second instance only forwards to a titled Dacx window, not any untitled Flutter runner.
+- **Update - Linux/Flatpak drag-and-drop:** `desktop_drop` 0.8.4 registers the portal FileTransfer target so sandboxed drops yield openable paths.
 
 ## Changes in `v0.11.2-beta.3:`
 - **Fix - Keyboard shortcuts:** After file pickers, clicking the video, or losing window focus, Space / arrows / Ctrl-Cmd chords stopped working. Shortcuts now keep working when Flutter focus is lost; Windows restores keyboard to the Flutter view after modal dialogs. Held `Ctrl/Cmd+Arrow` no longer repeats paused-video frame-step.

@@ -289,9 +289,6 @@ bool ForwardToRunningInstance(const std::vector<std::string>& file_paths) {
   // The secondary process still owns the foreground lock. Vouch for the
   // primary (and restore it here) so ActivatePrimaryWindow is not denied.
   HWND hwnd = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"Dacx");
-  if (hwnd == nullptr) {
-    hwnd = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", nullptr);
-  }
   if (hwnd != nullptr) {
     DWORD pid = 0;
     const DWORD tid = ::GetWindowThreadProcessId(hwnd, &pid);

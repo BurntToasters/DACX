@@ -272,6 +272,12 @@ void main() {
           PlayerPathUtils.isUnsafeOpenPath('https://example.com/a.mp3'),
           isFalse,
         );
+        expect(
+          PlayerPathUtils.isUnsafeOpenPath(
+            'https://user:pass@example.com/a.mp3',
+          ),
+          isTrue,
+        );
         expect(PlayerPathUtils.isUnsafeOpenPath('file:///tmp/a.mp3'), isFalse);
       });
     });
