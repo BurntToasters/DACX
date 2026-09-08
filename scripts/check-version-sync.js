@@ -67,9 +67,10 @@ if (!pubMatch) {
 const metainfoPath = "run.rosie.dacx.metainfo.xml";
 if (fs.existsSync(path.join(root, metainfoPath))) {
   const meta = readText(metainfoPath);
-  if (!meta.includes(`version="${pkgVersion}"`)) {
+  const metaVersion = semverToDebianVersion(pkgVersion);
+  if (!meta.includes(`version="${metaVersion}"`)) {
     failures.push(
-      `${metainfoPath} has no <release version="${pkgVersion}"> entry`,
+      `${metainfoPath} has no <release version="${metaVersion}"> entry`,
     );
   }
 }

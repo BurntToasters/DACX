@@ -73,9 +73,10 @@ syncFile(
   "run.rosie.dacx.metainfo.xml",
   path.join(root, "run.rosie.dacx.metainfo.xml"),
   (text) => {
-    if (text.includes(`version="${version}"`)) return null;
+    const metaVersion = semverToDebianVersion(version);
+    if (text.includes(`version="${metaVersion}"`)) return null;
     const today = new Date().toISOString().slice(0, 10);
-    const releaseTag = `    <release version="${version}" date="${today}"/>\n`;
+    const releaseTag = `    <release version="${metaVersion}" date="${today}"/>\n`;
     return text.replace(/(<releases>\s*\n)/, `$1${releaseTag}`);
   },
 );

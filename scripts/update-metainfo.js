@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { isDirectExecution } from "./direct-execution.js";
-import { compareSemverDescending } from "./semver-sort.js";
+import { compareSemverDescending, semverToDebianVersion } from "./semver-sort.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,6 +43,7 @@ function run({ now = new Date() } = {}) {
   if (!version) {
     throw new Error("package.json has no version field");
   }
+  const metaVersion = semverToDebianVersion(version);
 
   const dateStr = formatDate(now);
   const xml = fs.readFileSync(xmlPath, "utf8");
@@ -54,18 +55,18 @@ function run({ now = new Date() } = {}) {
 
   const baseIndent = releasesLineMatch[1] || "";
   const releaseIndent = `${baseIndent}  `;
-  const newReleaseTag = `${releaseIndent}<release version="${version}" date="${dateStr}"/>`;
+  const newReleaseTag = `${releaseIndent}<release version="${metaVersion}" date="${dateStr}"/>`;
 
   function refreshReleaseTag(rawTag) {
     const tag = rawTag.trim();
     const versionMatch = tag.match(/version="([^"]+)"/);
     const tagVersion = versionMatch ? versionMatch[1] : "";
-    if (tagVersion !== version) return tag;
+    if (semverToDebianVersion(tagVersion) !== metaVersion) return tag;
 
     if (tag.includes("</release>")) {
       return tag.replace(/\bdate="[^"]*"/, `date="${dateStr}"`);
     }
-    return `<release version="${version}" date="${dateStr}"/>`;
+    return `<release version="${metaVersion}" date="${dateStr}"/>`;
   }
 
   const releasesSectionRegex = /<releases>[\s\S]*?<\/releases>/;
@@ -81,12 +82,19 @@ function run({ now = new Date() } = {}) {
   const rebuiltEntries = [];
   let replacedCurrentVersion = false;
 
+  function toMetaReleaseTag(tag) {
+    return tag.replace(
+      /version="([^"]+)"/,
+      (_, tagVersion) => `version="${semverToDebianVersion(tagVersion)}"`,
+    );
+  }
+
   for (const rawTag of existingReleaseTags) {
-    const tag = rawTag.trim();
+    const tag = toMetaReleaseTag(rawTag.trim());
     const versionMatch = tag.match(releaseVersionRegex);
     const tagVersion = versionMatch ? versionMatch[1] : "";
 
-    if (tagVersion === version) {
+    if (semverToDebianVersion(tagVersion) === metaVersion) {
       if (!replacedCurrentVersion) {
         rebuiltEntries.push(refreshReleaseTag(tag));
         replacedCurrentVersion = true;
