@@ -27,7 +27,7 @@ function validateReleaseNotes(notes, version) {
   );
   const isPrerelease = version.includes('beta') || version.includes('alpha');
 
-  if (!visibleNotes.startsWith('> [!')) {
+  if (isPrerelease && !visibleNotes.startsWith('> [!')) {
     failures.push('CHANGELOG.md must begin with a release notice');
   }
   if (!currentRelease.startsWith(expectedHeading)) {

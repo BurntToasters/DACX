@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { semverToDebianVersion } from "./semver-sort.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const metainfo = path.join(root, "run.rosie.dacx.metainfo.xml");
@@ -24,7 +25,7 @@ if (!fs.existsSync(metainfo) || !fs.existsSync(script)) {
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-const version = pkg.version;
+const version = semverToDebianVersion(pkg.version);
 
 const original = fs.readFileSync(metainfo, "utf8");
 let exit = 0;

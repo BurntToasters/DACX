@@ -16,8 +16,13 @@ import {
   shouldSkipBetaMirror,
 } from "./post-release-assets.js";
 
-const STABLE_VERSION = "0.11.2";
-const BETA_VERSION = "0.11.2-beta.2";
+const packageJsonForVersions = JSON.parse(
+  fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+);
+const STABLE_VERSION = String(packageJsonForVersions.version)
+  .split("+")[0]
+  .split("-")[0];
+const BETA_VERSION = `${STABLE_VERSION}-beta.2`;
 
 test("module entrypoint comparison tolerates Windows path casing", () => {
   const scriptUrl = new URL("./post-release-assets.js", import.meta.url);
@@ -159,9 +164,12 @@ test("skips AFTER_PACK_LOC mirroring for beta versions unless overridden", () =>
 });
 
 test("release finalization runs the dedicated mirror command", () => {
-  const packageJson = JSON.parse(
-    fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  assert.match(
+    packageJsonForVersions.scripts["release:mirror"],
+    /scripts\/finalize-release-assets\.js/,
   );
-  assert.match(packageJson.scripts["release:mirror"], /scripts\/finalize-release-assets\.js/);
-  assert.equal(packageJson.scripts["release:finalize"], "npm run release:mirror");
+  assert.equal(
+    packageJsonForVersions.scripts["release:finalize"],
+    "npm run release:mirror",
+  );
 });

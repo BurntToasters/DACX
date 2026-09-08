@@ -1,5 +1,9 @@
+function semverToDebianVersion(semver) {
+  return String(semver).split("+")[0].replace("-", "~");
+}
+
 function parseSemver(version) {
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/);
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:[-~]([0-9A-Za-z.-]+))?$/);
   if (!match) return null;
   return {
     major: Number(match[1]),
@@ -41,7 +45,7 @@ function compareSemverDescending(a, b) {
   if (!aPrerelease && bPrerelease) return -1;
   if (aPrerelease && !bPrerelease) return 1;
   if (!aPrerelease && !bPrerelease) return 0;
-  return -comparePrerelease(va.prerelease, vb.prerelease);
+  return comparePrerelease(vb.prerelease, va.prerelease);
 }
 
-export { compareSemverDescending };
+export { compareSemverDescending, semverToDebianVersion };
