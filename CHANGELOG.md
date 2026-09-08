@@ -1,15 +1,15 @@
-> [!NOTE]
-> 🅱️ This is a Beta build.
+<!--> [!NOTE]
+> 🅱️ This is a Beta build. -->
 
 # ⬇️ Downloads
 
 | <img height="20" src="https://raw.githubusercontent.com/BurntToasters/bcls/main/media/windows.png" /> Windows | <img height="20" src="https://raw.githubusercontent.com/BurntToasters/bcls/main/media/mac.png" /> macOS | <img height="20" src="https://raw.githubusercontent.com/BurntToasters/bcls/main/media/linux.png" /> Linux |
 | :--- | :--- | :--- |
-| **MSI:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Windows-x64.msi) | **[Universal DMG](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-macOS.dmg)** | **AppImage:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Linux-x86_64.AppImage) |
-| | **[Universal ZIP](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-macOS.zip)** | **DEB (Deprecated):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Linux-amd64.deb) |
-| | | **RPM (Deprecated):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Linux-x86_64.rpm) |
-| | | **Flatpak:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Linux-x86_64.flatpak) |
-| | | **TAR (Generic Linux):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2-beta.4/Dacx-Linux-x86_64.tar.gz) |
+| **MSI:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2/Dacx-Windows-x64.msi) | **[Universal DMG](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2/Dacx-macOS.dmg)** | **AppImage:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2/Dacx-Linux-x86_64.AppImage) |
+| | **[Universal ZIP](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2/Dacx-macOS.zip)** | **DEB (Deprecated):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2/Dacx-Linux-amd64.deb) |
+| | | **RPM (Deprecated):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2/Dacx-Linux-x86_64.rpm) |
+| | | **Flatpak:** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2/Dacx-Linux-x86_64.flatpak) |
+| | | **TAR (Generic Linux):** [x64](https://github.com/BurntToasters/Dacx/releases/download/v0.11.2/Dacx-Linux-x86_64.tar.gz) |
 
 > [!IMPORTANT]
 > The `.asc` files are my normal GPG signatures which you can verify using my GPG Public Key: https://tuxedo.rosie.run/GPG/BurntToasters_0xF2FBC20F_public.asc.
@@ -18,7 +18,8 @@
 
 ### ℹ️ Enjoying Dacx? Consider [❤️ Supporting Me! ❤️](https://rosie.run/support)
 
-## Changes in `v0.11.2-beta.4:`
+## Changes in `v0.11.2:`
+- **NEW - Paused video frame stepping:** `Ctrl/Cmd+Left/Right Arrow` moves backward or forward by one frame. During playback, the same shortcuts keep navigating chapters.
 - **Flutter:** Updated flutter to `3.47.2`.
 - **DEB/RPM Binaries:** DEB and RPM binaries are now deprecated. In this modern era of linux, users don't usually sideload `deb` or especially `rpm` binaries anymore. AppImage and Flatpak are more favorable due to their universal compatibility with distros.
   - `DEB` and `RPM` binaries will still be available as of now, but they are officially deprecated and may be removed in the future.
@@ -28,14 +29,6 @@
 - **Fix - Credential stream URLs:** Open With / IPC no longer treats `http(s)` URLs with embedded userinfo as local files.
 - **Fix - Open With window targeting:** A second instance only forwards to a titled Dacx window, not any untitled Flutter runner.
 - **Update - Linux/Flatpak drag-and-drop:** `desktop_drop` 0.8.4 registers the portal FileTransfer target so sandboxed drops yield openable paths.
-
-## Changes in `v0.11.2-beta.3:`
-- **Fix - Keyboard shortcuts:** After file pickers, clicking the video, or losing window focus, Space / arrows / Ctrl-Cmd chords stopped working. Shortcuts now keep working when Flutter focus is lost; Windows restores keyboard to the Flutter view after modal dialogs. Held `Ctrl/Cmd+Arrow` no longer repeats paused-video frame-step.
-
-## Changes in `v0.11.2-beta.2:`
-- **NEW - Paused video frame stepping:** `Ctrl/Cmd+Left/Right Arrow` moves backward or forward by one frame. During playback, the same shortcuts keep navigating chapters.
-
-## Changes in `v0.11.2-beta.1:`
 - **Fix - Open With no longer wipes the queue:** Missing or unsafe files are validated before `setPlayingSource`, so a bad Open With path cannot replace a live queue.
 - **Fix - Load follow-ups honor generation:** Resume, mix, chapters, album-art track select, and audio filters abort when a newer open starts.
 - **Fix - Stop is one path:** UI Stop, media-session Stop, and the sleep timer persist resume, clear mix/filters, stop mpv, clear the OS media session, and reset the surface.
@@ -53,14 +46,8 @@
 - **Fix - file_picker 12.0:** Open/save/enqueue use `PlatformFile` / save `Uri` and platform lock options after the stable 12.0 API. Save URIs keep POSIX vs Windows path shape so Windows tests and `C:` paths round-trip.
 - **Docs:** One Windows signing story (Azure Artifact Signing + `SKIP_WIN_CODESIGN=1`).
 
-## Changes in `v0.11.1:`
-### IMPORTANT: A bug in `v0.11.0` (Stable) broke the self-updater for Windows. Windows users need to manually download the `v0.11.1` or future installers manually to fix the issue and continue receiving updates.
-*Im really sorry that this happened everyone! It's fixed now and I also added better fallback code but still a big flop from me my bad!*
-
-- **Fix - Windows updater Authenticode check:** Self-update failed with `Get-AuthenticodeSignature ... LiteralPath is null` because PowerShell `-Command <string>` does not populate `$args` from trailing process arguments. The MSI path is now embedded and single-quote-escaped in the verification script.
-- **Windows upgrade note:** `v0.11.0` and `v0.11.1-beta.1` execute the broken updater before the fixed build can install. Windows users on either version must download and run the `v0.11.1` MSI once; later updates can use in-app self-update again.
-- **Updater recovery:** Failed self-updates now offer an explicit **Download the update manually** action. Stable releases use the platform-aware `rosie.run/dacx/update?from=...` page; beta releases retain their exact prerelease page to avoid directing testers to an older stable build.
-- **Codebase:** `npm run setup:flutter` now prevents FVM's implicit `pub get`, verifies FVM resolved the exact `.fvmrc` version, then runs one explicit package resolution. This prevents package graph writes before SDK health/version validation.
+<details>
+<summary>Full changelog</summary>
 
 ## Changes in `v0.11.0:`
 - **NEW - Windows code signing:** WOO HOO!! Windows Codesigning is here!
@@ -97,9 +84,6 @@
 - **Docs:** Clarified per-file resume, empty relaunch behavior, Flatpak sideload status, and the Ed25519-first Windows signing model.
 - **Docs:** Expanded `docs/QA.md` for per-file resume, Reopen Last + resume, media-session artwork, and mix failure feedback.
 - **Docs/PKG:** Version sync checks `package-lock.json` and Flatpak `# x-version:`; Linux tray build dep (`libayatana-appindicator3-dev`) in setup/CI; deb/rpm runtime Depends for appindicator; `NATIVE_DEPENDENCIES.md` clarifies bundled vs system libmpv.
-
-<details>
-<summary>Full changelog</summary>
 
 ## Changes in `v0.9.0:`
 ### UI - Major UI Overhaul!
